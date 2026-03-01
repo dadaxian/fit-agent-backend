@@ -46,5 +46,18 @@ services:
       - ./src:/app/src:ro
       - ./aegra.json:/app/aegra.json:ro
 
+  voice_proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.voice
+    container_name: fit_agent-voice
+    ports:
+      - "${VOICE_PROXY_PORT:-8001}:8001"
+    env_file:
+      - .env
+    environment:
+      - ZHIPUAI_API_KEY=${ZHIPUAI_API_KEY}
+      - VOICE_PROXY_PORT=8001
+
 volumes:
   postgres_data:

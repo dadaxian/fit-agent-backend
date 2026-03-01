@@ -10,6 +10,16 @@ uv sync                    # Install dependencies
 uv run aegra dev           # Start developing!
 ```
 
+### 语音代理（TTS/ASR）
+
+如需语音输入和朗读（智谱 GLM-TTS / GLM-ASR），需单独启动语音代理：
+
+```bash
+uv run python voice_proxy.py   # 默认端口 8001
+```
+
+需安装 ffmpeg（用于 webm→wav 转换）：`brew install ffmpeg`
+
 ## Project Structure
 
 ```
