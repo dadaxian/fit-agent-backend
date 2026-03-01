@@ -4,6 +4,6 @@
     "./src"
   ],
   "graphs": {
-    "fit_agent": "./src/fit_agent/graph.py:graph"
+    "agent": "./src/fit_agent/graph.py:graph"
   }
 }

@@ -34,3 +34,5 @@ htmlcov/
 
 # mypy
 .mypy_cache/
+/fit-agent/
+/fitter/
