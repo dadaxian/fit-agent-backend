@@ -1,0 +1,9 @@
+{
+  "name": "fit-agent",
+  "dependencies": [
+    "./src"
+  ],
+  "graphs": {
+    "fit_agent": "./src/fit_agent/graph.py:graph"
+  }
+}
