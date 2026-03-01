@@ -10,6 +10,7 @@ dependencies = [
     "uvicorn>=0.32.0",
     "python-multipart>=0.0.9",
     "pydub>=0.25.0",
+    "audioop-lts>=0.2.0; python_version>='3.13'",
     "langgraph>=1.0.8",
     "langchain>=0.3.14",
     "langchain-openai>=0.3.0",

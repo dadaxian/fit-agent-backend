@@ -1,35 +1,20 @@
-#!/usr/bin/env python3
 """
-Voice proxy for FitFlow: TTS (GLM-TTS) and ASR (GLM-ASR-2512) via 智谱 API.
-Run: uv run python voice_proxy.py
+Custom routes for Aegra: TTS and ASR via 智谱 GLM-TTS / GLM-ASR-2512.
+Mounted alongside Agent Protocol. See: https://docs.aegra.dev/guides/custom-routes
 """
 import os
-from contextlib import asynccontextmanager
+from io import BytesIO
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 ZHIPU_BASE = "https://open.bigmodel.cn/api/paas/v4"
 
+router = APIRouter(prefix="/voice", tags=["voice"])
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    api_key = os.environ.get("ZHIPUAI_API_KEY")
-    if not api_key:
-        print("Warning: ZHIPUAI_API_KEY not set, TTS/ASR will fail")
-    yield
-
-
-app = FastAPI(title="FitFlow Voice Proxy", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Export app for Aegra http.app (https://docs.aegra.dev/guides/custom-routes)
+app = FastAPI()
 
 
 def _get_api_key():
@@ -39,7 +24,28 @@ def _get_api_key():
     return key
 
 
-@app.post("/tts")
+def _ensure_wav(content: bytes, content_type: str) -> tuple[bytes, str]:
+    """Convert webm/ogg to wav if needed. 智谱 ASR only accepts wav/mp3."""
+    if content_type and "wav" in content_type:
+        return content, "audio/wav"
+    if content_type and "mp3" in content_type:
+        return content, "audio/mpeg"
+    try:
+        from pydub import AudioSegment
+
+        bio = BytesIO(content)
+        fmt = "webm" if (content_type or "").lower().find("webm") >= 0 else "ogg"
+        seg = AudioSegment.from_file(bio, format=fmt)
+        out = BytesIO()
+        seg.export(out, format="wav")
+        return out.getvalue(), "audio/wav"
+    except Exception as e:
+        raise HTTPException(
+            400, f"Unsupported audio format (need wav/mp3). Conversion failed: {e}"
+        ) from e
+
+
+@router.post("/tts")
 async def tts(
     text: str = Form(...),
     voice: str = Form("female"),
@@ -70,31 +76,12 @@ async def tts(
     return Response(content=r.content, media_type="audio/wav")
 
 
-def _ensure_wav(content: bytes, content_type: str) -> tuple[bytes, str]:
-    """Convert webm/ogg to wav if needed. 智谱 ASR only accepts wav/mp3."""
-    if content_type and "wav" in content_type:
-        return content, "audio/wav"
-    if content_type and "mp3" in content_type:
-        return content, "audio/mpeg"
-    # webm/ogg -> wav via pydub
-    try:
-        from io import BytesIO
-        from pydub import AudioSegment
-        bio = BytesIO(content)
-        seg = AudioSegment.from_file(bio, format="webm" if "webm" in (content_type or "") else "ogg")
-        out = BytesIO()
-        seg.export(out, format="wav")
-        return out.getvalue(), "audio/wav"
-    except Exception as e:
-        raise HTTPException(400, f"Unsupported audio format (need wav/mp3). Conversion failed: {e}") from e
-
-
-@app.post("/asr")
+@router.post("/asr")
 async def asr(file: UploadFile = File(...)):
     """Speech-to-Text via GLM-ASR-2512. Accepts WAV/MP3/WebM, returns text."""
     api_key = _get_api_key()
     content = await file.read()
-    if len(content) > 25 * 1024 * 1024:  # 25 MB
+    if len(content) > 25 * 1024 * 1024:
         raise HTTPException(400, "File too large (max 25 MB)")
     content, ctype = _ensure_wav(content, file.content_type or "")
     async with httpx.AsyncClient() as client:
@@ -111,12 +98,4 @@ async def asr(file: UploadFile = File(...)):
     return {"text": data.get("text", "")}
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("VOICE_PROXY_PORT", "8001"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+app.include_router(router)

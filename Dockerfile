@@ -37,10 +37,11 @@ FROM base AS final
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libpq5 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.venv /app/.venv
-COPY aegra.json .
+COPY aegra.json custom_routes.py ./
 
 ENV PATH="/app/.venv/bin:$PATH"
 

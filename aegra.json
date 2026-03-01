@@ -1,9 +1,8 @@
 {
   "name": "fit-agent",
-  "dependencies": [
-    "./src"
-  ],
-  "graphs": {
-    "agent": "./src/fit_agent/graph.py:graph"
+  "dependencies": ["./src"],
+  "graphs": {"agent": "./src/fit_agent/graph.py:graph"},
+  "http": {
+    "app": "./custom_routes.py:app"
   }
 }
