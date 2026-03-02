@@ -26,6 +26,8 @@ enum ChatDisplayBlock: Identifiable {
     }
 }
 
+private let threadIdKey = "fit-swift-thread-id"
+
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
@@ -33,18 +35,54 @@ final class ChatViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
     @Published var currentAIResponse = ""
+    @Published var isRestoringHistory = false
 
-    private var threadId: String?
+    private var threadId: String? {
+        didSet {
+            if let id = threadId {
+                UserDefaults.standard.set(id, forKey: threadIdKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: threadIdKey)
+            }
+        }
+    }
+
     private var apiClient: APIClient
     private var streamTask: Task<Void, Never>?
     private var sendInProgress = false
 
     init(apiClient: APIClient = APIClient()) {
         self.apiClient = apiClient
+        self.threadId = UserDefaults.standard.string(forKey: threadIdKey)
     }
 
     func setAPIClient(_ client: APIClient) {
         apiClient = client
+    }
+
+    /// 恢复历史状态（fetchStateHistory），在登录后、有持久化 threadId 时调用
+    func restoreStateIfNeeded() async {
+        guard let tid = threadId, !tid.isEmpty else { return }
+        isRestoringHistory = true
+        defer { isRestoringHistory = false }
+        do {
+            let state = try await apiClient.getThreadState(threadId: tid)
+            if let values = state["values"] as? [String: Any],
+               let rawMsgs = values["messages"] as? [[String: Any]], !rawMsgs.isEmpty {
+                displayBlocks = buildDisplayBlocks(from: rawMsgs)
+                messages = rawMsgs.compactMap { m -> ChatMessage? in
+                    let type = m["type"] as? String ?? ""
+                    let text = extractText(from: m)
+                    guard !text.isEmpty else { return nil }
+                    let id = m["id"] as? String ?? UUID().uuidString
+                    return ChatMessage(id: id, isHuman: type == "human", text: text)
+                }
+            }
+        } catch {
+            // Token 失效或线程不存在，清除持久化
+            threadId = nil
+            UserDefaults.standard.removeObject(forKey: threadIdKey)
+        }
     }
 
     func newChat() {
@@ -56,6 +94,12 @@ final class ChatViewModel: ObservableObject {
         displayBlocks = []
         currentAIResponse = ""
         error = nil
+    }
+
+    /// 用户登出时清除 threadId
+    func onLogout() {
+        threadId = nil
+        newChat()
     }
 
     func send(text: String) {
@@ -75,17 +119,19 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// 将原始消息分组为展示块：human 独立；ai + 其后的 tool 归为一个 aiBlock
+    /// 使用消息 id 保持稳定，避免流式更新时闪烁
     private func buildDisplayBlocks(from rawMsgs: [[String: Any]]) -> [ChatDisplayBlock] {
         var blocks: [ChatDisplayBlock] = []
         var i = 0
         while i < rawMsgs.count {
             let m = rawMsgs[i]
             let msgType = m["type"] as? String ?? ""
+            let msgId = m["id"] as? String ?? UUID().uuidString
             switch msgType {
             case "human":
                 let t = extractText(from: m)
                 if !t.isEmpty {
-                    blocks.append(.human(id: UUID().uuidString, text: t))
+                    blocks.append(.human(id: "h-\(msgId)", text: t))
                 }
                 i += 1
             case "ai":
@@ -104,16 +150,18 @@ final class ChatViewModel: ObservableObject {
                     let tm = rawMsgs[i]
                     let name = tm["name"] as? String ?? "tool"
                     let result = tm["content"] as? String ?? extractText(from: tm)
-                    toolResults.append(ToolResultItem(id: UUID().uuidString, name: name, result: result))
+                    let trId = (tm["id"] as? String) ?? UUID().uuidString
+                    toolResults.append(ToolResultItem(id: trId, name: name, result: result))
                     i += 1
                 }
-                blocks.append(.aiBlock(id: UUID().uuidString, aiText: aiText, toolCalls: toolCalls, toolResults: toolResults))
+                blocks.append(.aiBlock(id: "a-\(msgId)", aiText: aiText, toolCalls: toolCalls, toolResults: toolResults))
             case "tool":
                 let last = blocks.last
                 if case .aiBlock(let id, let aiText, let tcs, var trs) = last {
                     let name = m["name"] as? String ?? "tool"
                     let result = m["content"] as? String ?? extractText(from: m)
-                    trs.append(ToolResultItem(id: UUID().uuidString, name: name, result: result))
+                    let trId = (m["id"] as? String) ?? UUID().uuidString
+                    trs.append(ToolResultItem(id: trId, name: name, result: result))
                     blocks[blocks.count - 1] = .aiBlock(id: id, aiText: aiText, toolCalls: tcs, toolResults: trs)
                 }
                 i += 1
@@ -156,9 +204,15 @@ final class ChatViewModel: ObservableObject {
 
             for try await chunk in try await apiClient.streamRun(threadId: tid, messages: inputMessages) {
                 if Task.isCancelled { break }
-                let msgs = (chunk["messages"] as? [[String: Any]])
-                    ?? (chunk["values"] as? [String: Any])?["messages"] as? [[String: Any]]
-                guard let rawMsgs = msgs else { continue }
+                // 支持 values（快照）和 messages（增量）两种格式
+                let rawMsgs: [[String: Any]]
+                if let vals = chunk["values"] as? [String: Any], let m = vals["messages"] as? [[String: Any]] {
+                    rawMsgs = m
+                } else if let m = chunk["messages"] as? [[String: Any]] {
+                    rawMsgs = m
+                } else {
+                    continue
+                }
 
                 streamBlocks = buildDisplayBlocks(from: rawMsgs)
                 if let lastAI = streamBlocks.compactMap({ b -> String? in

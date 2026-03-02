@@ -5,9 +5,17 @@ import AVFoundation
 /// 对接后端 /voice/asr 和 /voice/tts
 final class VoiceService {
     let baseURL: String
+    let authToken: String?
 
-    init(baseURL: String = "http://139.196.181.42:8000") {
+    init(baseURL: String = "http://139.196.181.42:8000", authToken: String? = nil) {
         self.baseURL = baseURL.replacingOccurrences(of: "/$", with: "", options: .regularExpression)
+        self.authToken = authToken
+    }
+
+    private func setAuthHeaders(_ req: inout URLRequest) {
+        if let token = authToken, !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     /// 语音转文字
@@ -15,6 +23,7 @@ final class VoiceService {
         let url = URL(string: "\(baseURL)/voice/asr")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        setAuthHeaders(&req)
         let boundary = UUID().uuidString
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -40,6 +49,7 @@ final class VoiceService {
         let url = URL(string: "\(baseURL)/voice/tts")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        setAuthHeaders(&req)
         let boundary = UUID().uuidString
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -51,7 +61,7 @@ final class VoiceService {
         }
         appendField("text", text)
         appendField("voice", "female")
-        appendField("speed", "1.0")
+        appendField("speed", "1.5")
         appendField("volume", "1.0")
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body

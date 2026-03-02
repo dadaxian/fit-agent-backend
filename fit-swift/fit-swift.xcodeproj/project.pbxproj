@@ -22,12 +22,14 @@
 		A1B2C3D4E5F600000000000D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F600000000000E /* RootView.swift */; };
 		A1B2C3D4E5F600000000000E /* CoachAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F600000000000F /* CoachAvatar.swift */; };
 		A1B2C3D4E5F6000000000010 /* MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000010 /* MarkdownText.swift */; };
+		A1B2C3D4E5F6000000000011 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000011 /* AuthService.swift */; };
+		A1B2C3D4E5F6000000000012 /* ProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000012 /* ProfileStore.swift */; };
+		A1B2C3D4E5F6000000000013 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000013 /* ProfileView.swift */; };
 		B2B2C3D4E5F6000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3D4E5F6000000000001 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A3B2C3D4E5F6000000000001 /* fit-swift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "fit-swift.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A2B2C3D4E5F6000000000001 /* fit-swiftApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = fit-swiftApp.swift; sourceTree = "<group>"; };
+		A2B2C3D4E5F6000000000001 /* fit-swiftApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "fit-swiftApp.swift"; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000003 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000004 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
@@ -43,6 +45,10 @@
 		A2B2C3D4E5F600000000000E /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F600000000000F /* CoachAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachAvatar.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000010 /* MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownText.swift; sourceTree = "<group>"; };
+		A2B2C3D4E5F6000000000011 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		A2B2C3D4E5F6000000000012 /* ProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStore.swift; sourceTree = "<group>"; };
+		A2B2C3D4E5F6000000000013 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		A3B2C3D4E5F6000000000001 /* fit-swift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "fit-swift.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1B2C3D4E5F6000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -73,6 +79,9 @@
 				A2B2C3D4E5F6000000000003 /* ChatView.swift */,
 				A2B2C3D4E5F6000000000004 /* ChatViewModel.swift */,
 				A2B2C3D4E5F6000000000005 /* APIClient.swift */,
+				A2B2C3D4E5F6000000000011 /* AuthService.swift */,
+				A2B2C3D4E5F6000000000012 /* ProfileStore.swift */,
+				A2B2C3D4E5F6000000000013 /* ProfileView.swift */,
 				A2B2C3D4E5F6000000000006 /* VoiceService.swift */,
 				A2B2C3D4E5F6000000000007 /* AudioRecorder.swift */,
 				A2B2C3D4E5F6000000000008 /* DashboardView.swift */,
@@ -86,7 +95,7 @@
 				A2B2C3D4E5F6000000000010 /* MarkdownText.swift */,
 				B1B2C3D4E5F6000000000001 /* Assets.xcassets */,
 			);
-			path = fit-swift;
+			path = "fit-swift";
 			sourceTree = "<group>";
 		};
 		A5B2C3D4E5F6000000000003 /* Products */ = {
@@ -125,7 +134,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					A6B2C3D4E5F6000000000001 = {
 						CreatedOnToolsVersion = 15.0;
@@ -171,6 +180,7 @@
 				A1B2C3D4E5F6000000000003 /* ChatView.swift in Sources */,
 				A1B2C3D4E5F6000000000004 /* ChatViewModel.swift in Sources */,
 				A1B2C3D4E5F6000000000005 /* APIClient.swift in Sources */,
+				A1B2C3D4E5F6000000000011 /* AuthService.swift in Sources */,
 				A1B2C3D4E5F6000000000006 /* VoiceService.swift in Sources */,
 				A1B2C3D4E5F6000000000007 /* AudioRecorder.swift in Sources */,
 				A1B2C3D4E5F6000000000008 /* DashboardView.swift in Sources */,
@@ -181,6 +191,8 @@
 				A1B2C3D4E5F600000000000D /* RootView.swift in Sources */,
 				A1B2C3D4E5F600000000000E /* CoachAvatar.swift in Sources */,
 				A1B2C3D4E5F6000000000010 /* MarkdownText.swift in Sources */,
+				A1B2C3D4E5F6000000000012 /* ProfileStore.swift in Sources */,
+				A1B2C3D4E5F6000000000013 /* ProfileView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -191,6 +203,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -222,6 +235,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 45NLRVXCG6;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -245,6 +259,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -254,6 +269,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -285,6 +301,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 45NLRVXCG6;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -301,6 +318,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -311,10 +329,9 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = fit-swift/Info.plist;
+				INFOPLIST_FILE = "fit-swift/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "FitFlow 私教";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -339,10 +356,9 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = fit-swift/Info.plist;
+				INFOPLIST_FILE = "fit-swift/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "FitFlow 私教";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

@@ -111,10 +111,10 @@ def _ensure_wav(content: bytes, content_type: str) -> tuple[bytes, str]:
 async def tts(
     text: str = Form(...),
     voice: str = Form("female"),
-    speed: float = Form(1.0),
+    speed: float = Form(1.5),
     volume: float = Form(1.0),
 ):
-    """Text-to-Speech via GLM-TTS. Returns WAV audio."""
+    """Text-to-Speech via GLM-TTS. Returns WAV audio. use_cache=True, speed 1.5 default."""
     api_key = _get_api_key()
     async with httpx.AsyncClient() as client:
         r = await client.post(
@@ -130,6 +130,7 @@ async def tts(
                 "speed": speed,
                 "volume": volume,
                 "response_format": "wav",
+                "use_cache": True,
             },
             timeout=30.0,
         )

@@ -5,10 +5,18 @@ import Foundation
 final class APIClient {
     let baseURL: String
     let assistantId: String
+    let authToken: String?
 
-    init(baseURL: String = "http://139.196.181.42:8000", assistantId: String = "agent") {
+    init(baseURL: String = "http://139.196.181.42:8000", assistantId: String = "agent", authToken: String? = nil) {
         self.baseURL = baseURL.replacingOccurrences(of: "/$", with: "", options: .regularExpression)
         self.assistantId = assistantId
+        self.authToken = authToken
+    }
+
+    private func setAuthHeaders(_ req: inout URLRequest) {
+        if let token = authToken, !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     /// 创建新对话线程
@@ -19,17 +27,50 @@ final class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        setAuthHeaders(&req)
         req.httpBody = "{}".data(using: .utf8)
 
         let (data, res) = try await URLSession.shared.data(for: req)
-        guard let http = res as? HTTPURLResponse, http.statusCode == 200 else {
-            throw APIError.httpError(status: (res as? HTTPURLResponse)?.statusCode ?? 0)
+        guard let http = res as? HTTPURLResponse else {
+            throw APIError.httpError(status: 0)
+        }
+        if http.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        guard http.statusCode == 200 else {
+            throw APIError.httpError(status: http.statusCode)
         }
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let threadId = json?["thread_id"] as? String else {
             throw APIError.parseError
         }
         return threadId
+    }
+
+    /// 获取线程当前状态（用于 fetchStateHistory，恢复历史消息）
+    /// GET /threads/{thread_id}/state
+    func getThreadState(threadId: String) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)/threads/\(threadId)/state") else {
+            throw APIError.invalidURL
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        setAuthHeaders(&req)
+
+        let (data, res) = try await URLSession.shared.data(for: req)
+        guard let http = res as? HTTPURLResponse else {
+            throw APIError.httpError(status: 0)
+        }
+        if http.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw APIError.httpError(status: http.statusCode)
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw APIError.parseError
+        }
+        return json
     }
 
     /// 流式发送消息并接收 AI 回复
@@ -48,10 +89,17 @@ final class APIClient {
             "stream_subgraphs": true,
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        setAuthHeaders(&req)
 
         let (bytes, res) = try await URLSession.shared.bytes(for: req)
-        guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw APIError.httpError(status: (res as? HTTPURLResponse)?.statusCode ?? 0)
+        guard let http = res as? HTTPURLResponse else {
+            throw APIError.httpError(status: 0)
+        }
+        if http.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw APIError.httpError(status: http.statusCode)
         }
 
         return AsyncThrowingStream { continuation in
@@ -95,12 +143,14 @@ final class APIClient {
         case invalidURL
         case httpError(status: Int)
         case parseError
+        case unauthorized
 
         var errorDescription: String? {
             switch self {
             case .invalidURL: return "无效的 API 地址"
             case .httpError(let s): return "请求失败 (HTTP \(s))"
             case .parseError: return "解析响应失败"
+            case .unauthorized: return "请先登录"
             }
         }
     }
