@@ -2,24 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
-from langgraph.managed import IsLastStep
-from typing import Annotated
 
 
-@dataclass
-class InputState:
+class InputState(TypedDict, total=False):
     """Input schema — only the fields the caller may provide."""
 
-    messages: Annotated[Sequence[AnyMessage], add_messages] = field(default_factory=list)
+    messages: Annotated[list[AnyMessage], add_messages]
 
 
-@dataclass
-class State(InputState):
+class State(InputState, total=False):
     """Internal state — extends InputState with runtime-managed fields."""
 
-    is_last_step: IsLastStep = field(default=False)
+    task_complete: bool
+    consecutive_no_tool_calls: int

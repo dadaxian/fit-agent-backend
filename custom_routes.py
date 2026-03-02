@@ -1,5 +1,5 @@
 """
-Custom routes for Aegra: TTS and ASR via 智谱 GLM-TTS / GLM-ASR-2512.
+Custom routes for Aegra: Auth, TTS, ASR.
 Mounted alongside Agent Protocol. See: https://docs.aegra.dev/guides/custom-routes
 """
 import os
@@ -8,13 +8,69 @@ from io import BytesIO
 import httpx
 from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel, EmailStr
+
+from fit_agent.auth_service import (
+    create_access_token,
+    create_user,
+    authenticate_user,
+)
+from fit_agent.database import get_db
 
 ZHIPU_BASE = "https://open.bigmodel.cn/api/paas/v4"
 
 router = APIRouter(prefix="/voice", tags=["voice"])
+auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Export app for Aegra http.app (https://docs.aegra.dev/guides/custom-routes)
 app = FastAPI()
+
+
+# --- Auth ---
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    display_name: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+@auth_router.post("/register")
+def register(req: RegisterRequest):
+    """注册新用户。"""
+    if len(req.password) < 6:
+        raise HTTPException(400, "密码至少 6 位")
+    with get_db() as db:
+        try:
+            user = create_user(db, req.email, req.password, req.display_name)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        user_id = user.id
+        user_email = user.email
+        user_display_name = user.display_name
+    return {
+        "access_token": create_access_token(user_id),
+        "user": {"id": user_id, "email": user_email, "display_name": user_display_name},
+    }
+
+
+@auth_router.post("/login")
+def login(req: LoginRequest):
+    """登录，返回 JWT。"""
+    with get_db() as db:
+        user = authenticate_user(db, req.email, req.password)
+        if not user:
+            raise HTTPException(401, "邮箱或密码错误")
+        user_id = user.id
+        user_email = user.email
+        user_display_name = user.display_name
+    return {
+        "access_token": create_access_token(user_id),
+        "user": {"id": user_id, "email": user_email, "display_name": user_display_name},
+    }
 
 
 def _get_api_key():
@@ -25,7 +81,7 @@ def _get_api_key():
 
 
 def _ensure_wav(content: bytes, content_type: str) -> tuple[bytes, str]:
-    """Convert webm/ogg to wav if needed. 智谱 ASR only accepts wav/mp3."""
+    """Convert webm/ogg/caf to wav if needed. 智谱 ASR only accepts wav/mp3."""
     if content_type and "wav" in content_type:
         return content, "audio/wav"
     if content_type and "mp3" in content_type:
@@ -34,7 +90,13 @@ def _ensure_wav(content: bytes, content_type: str) -> tuple[bytes, str]:
         from pydub import AudioSegment
 
         bio = BytesIO(content)
-        fmt = "webm" if (content_type or "").lower().find("webm") >= 0 else "ogg"
+        ct = (content_type or "").lower()
+        if "webm" in ct:
+            fmt = "webm"
+        elif "caf" in ct or "caff" in ct:
+            fmt = "caf"
+        else:
+            fmt = "ogg"
         seg = AudioSegment.from_file(bio, format=fmt)
         out = BytesIO()
         seg.export(out, format="wav")
@@ -98,4 +160,5 @@ async def asr(file: UploadFile = File(...)):
     return {"text": data.get("text", "")}
 
 
+app.include_router(auth_router)
 app.include_router(router)

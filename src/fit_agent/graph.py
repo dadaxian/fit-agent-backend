@@ -1,33 +1,18 @@
-"""fit-agent — Simple chatbot with message memory."""
+"""fit-agent — brain ↔ executor 循环，支持 run_command + Skills。"""
 
-from datetime import UTC, datetime
-
-from langchain_core.messages import SystemMessage
-from langgraph.graph import StateGraph
-from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph import END, StateGraph
 from langgraph.runtime import Runtime
 
 from fit_agent.context import Context
+from fit_agent.nodes import agent_node, route_after_agent, route_after_tools, tools_node
 from fit_agent.state import InputState, State
-from fit_agent.utils import load_chat_model
 
+workflow = StateGraph(State, input_schema=InputState, context_schema=Context)
+workflow.add_node("brain", agent_node)
+workflow.add_node("executor", tools_node)
+workflow.set_entry_point("brain")
 
-async def chatbot(state: State, runtime: Runtime[Context]) -> dict:
-    """Process messages and generate a response."""
-    model = load_chat_model(runtime.context.model)
-    system_message = SystemMessage(
-        content=runtime.context.system_prompt.format(
-            system_time=datetime.now(tz=UTC).isoformat(),
-        )
-    )
-    response = await model.ainvoke([system_message, *state.messages])
-    return {"messages": [response]}
+workflow.add_conditional_edges("brain", route_after_agent, {"tools": "executor", "agent": "brain", "end": END})
+workflow.add_conditional_edges("executor", route_after_tools, {"agent": "brain", "end": END})
 
-
-graph: CompiledStateGraph = (
-    StateGraph(State, input_schema=InputState, context_schema=Context)
-    .add_node("chatbot", chatbot)
-    .add_edge("__start__", "chatbot")
-    .add_edge("chatbot", "__end__")
-    .compile(name="fit-agent")
-)
+graph = workflow.compile()

@@ -34,5 +34,6 @@ htmlcov/
 
 # mypy
 .mypy_cache/
-/fit-agent/
-/fitter/
+
+# 用户工作区（run_command 产出）
+workspace/

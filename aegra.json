@@ -2,6 +2,9 @@
   "name": "fit-agent",
   "dependencies": ["./src"],
   "graphs": {"agent": "./src/fit_agent/graph.py:graph"},
+  "auth": {
+    "path": "./auth.py:auth"
+  },
   "http": {
     "app": "./custom_routes.py:app"
   }
