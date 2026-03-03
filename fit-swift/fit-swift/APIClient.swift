@@ -19,9 +19,9 @@ final class APIClient {
         }
     }
 
-    /// 创建新对话线程
-    func createThread() async throws -> String {
-        guard let url = URL(string: "\(baseURL)/threads") else {
+    /// 获取或创建当前用户的 thread（需登录）。同一用户始终返回同一 thread_id。
+    func getOrCreateThread() async throws -> String {
+        guard let url = URL(string: "\(baseURL)/threads/get-or-create") else {
             throw APIError.invalidURL
         }
         var req = URLRequest(url: url)

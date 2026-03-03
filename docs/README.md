@@ -13,6 +13,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 架构说明（Agent、工作区、Skills） |
 | [LESSONS_LEARNED.md](LESSONS_LEARNED.md) | 踩坑记录（避免重复浪费时间） |
 | [SESSION_ARCHITECTURE.md](SESSION_ARCHITECTURE.md) | 多会话 vs 单会话架构说明 |
+| [PRODUCT_DISCUSSION.md](PRODUCT_DISCUSSION.md) | 产品讨论与验证（定位、功能、发展路径） |
 
 ---
 

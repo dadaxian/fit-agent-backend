@@ -38,3 +38,4 @@ class User(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    active_thread_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

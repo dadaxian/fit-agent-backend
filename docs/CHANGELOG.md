@@ -4,6 +4,19 @@
 
 ---
 
+## [2026-03-02] 单会话模式
+
+- **变更类型**：架构调整
+- **涉及模块**：custom_routes、db、fitter、fit-swift、docs
+- **变更内容**：
+  - 从多会话改为**单会话**：每用户一个 thread，`users.active_thread_id` 存储
+  - `POST /threads/get-or-create` 返回或创建用户 thread，需登录
+  - fitter、fit-swift 移除「新对话」，登录后调用 get-or-create 获取 thread
+  - 更新 SESSION_ARCHITECTURE.md：当前决策为方案 B（单会话）
+- **备注**：符合「和教练一对一」心智，对话历史完整可回顾
+
+---
+
 ## [2026-03-02] 跨会话共享 + 主动记录训练进度
 
 - **变更类型**：新增/修改

@@ -1,5 +1,7 @@
 # 会话架构：多会话 vs 单会话
 
+> **当前模式**：**单会话**（每用户一个 thread，`users.active_thread_id` + `POST /threads/get-or-create`）
+
 ## 问题背景
 
 用户可能在不同 tab、不同设备、不同时间发起多轮对话。每轮对话对应一个 LangGraph **thread**。如何设计，使得：
@@ -52,25 +54,25 @@
 
 ---
 
-## 当前决策：方案 A（多会话共享）
+## 当前决策：方案 B（单会话）
+
+> **已切换**：2025-03，从多会话改为单会话模式。
 
 **理由**：
-1. 架构已支持：workspace 按 user_id，跨 thread 共享
-2. 多端、多 tab 更自然
-3. 实现成本低：只需确保 agent 读/写正确路径，并主动记录
+1. 符合「和教练一对一」的心智：同一段对话延续
+2. 对话历史完整，便于回顾
+3. 数据与对话深度打通时，单会话更易维护上下文连贯性
 
 **实现要点**：
-- 计划、进度、饮食等一律在 `workspace/<user_id>/` 下
-- Agent 每次涉及这些数据时，**先读**已有文件，再决定创建/修改
-- 用户提到训练进度时，**主动**更新 `session_state.json`
+- `users.active_thread_id` 存储用户活跃 thread
+- `POST /threads/get-or-create`（需登录）返回该用户的 thread_id，无则创建并写入
+- 前端（fitter、fit-swift）登录后调用 get-or-create 获取 thread，**不再提供「新对话」**
+- 计划、进度、饮食等仍在 `workspace/<user_id>/` 下，跨会话共享
+
+**多端行为**：同一用户在不同设备/ tab 打开时，均通过 get-or-create 拿到同一 thread_id，对话历史一致。
 
 ---
 
-## 若未来改为方案 B
+## 历史：方案 A（多会话共享）
 
-需要：
-1. 用户表或配置中增加 `primary_thread_id`
-2. 登录/创建 thread 时，若用户已有 primary_thread_id，则复用
-3. 前端「新对话」时，可选择「继续上次」或「真正新建」（新建时更新 primary_thread_id）
-
-当前阶段建议保持方案 A，待产品验证后再考虑方案 B。
+曾采用多会话，每用户可有多 thread。后改为单会话，详见上文。

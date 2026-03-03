@@ -24,12 +24,25 @@ struct ChatView: View {
     @State private var voiceInputState: VoiceInputState = .idle
     @State private var ttsState: TtsState = .idle
     @AppStorage("apiBaseURL") private var apiBaseURL = "http://139.196.181.42:8000"
+    @AppStorage("autoPlayTts") private var autoPlayTts = false
+    @AppStorage("ttsSpeed") private var ttsSpeedStr = "1.0"
+    @AppStorage("showToolMessages") private var showToolMessages = true
+    @State private var prevLoading = false
+
+    private var ttsSpeed: Double { Double(ttsSpeedStr) ?? 1.0 }
 
     var body: some View {
         NavigationStack {
             chatMainContent
                 .navigationTitle("AI 私教")
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if auth.isLoggedIn {
+                        ToolbarItem(placement: .topBarLeading) {
+                            ttsSettingsBar
+                        }
+                    }
+                }
         }
         .onAppear {
             updateAPIClient()
@@ -50,6 +63,18 @@ struct ChatView: View {
                 Task { await viewModel.restoreStateIfNeeded() }
             }
         }
+        .onChange(of: viewModel.isLoading) { wasLoading, nowLoading in
+            if prevLoading && !nowLoading && autoPlayTts {
+                if let last = viewModel.displayBlocks.last,
+                   case .aiBlock(_, let aiText, _, _) = last, !aiText.isEmpty {
+                    playTTS(aiText, speed: ttsSpeed)
+                } else if !viewModel.currentAIResponse.isEmpty {
+                    playTTS(viewModel.currentAIResponse, speed: ttsSpeed)
+                }
+            }
+            prevLoading = nowLoading
+        }
+        .onAppear { prevLoading = viewModel.isLoading }
     }
 
     @ViewBuilder
@@ -80,15 +105,7 @@ struct ChatView: View {
 
     @ViewBuilder
     private var chatContentWhenLoggedIn: some View {
-        if !viewModel.messages.isEmpty {
-            HStack {
-                Spacer()
-                Button("新对话") { viewModel.newChat() }
-                    .font(.subheadline)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-            }
-        }
+        // 同一用户持久使用同一 thread，不再提供「新对话」
         if let err = viewModel.error {
             Text(err)
                 .font(.caption)
@@ -110,6 +127,31 @@ struct ChatView: View {
         chatScrollArea
         Divider()
         chatInputRow
+    }
+
+    private var ttsSettingsBar: some View {
+        Menu {
+            Toggle("自动朗读", isOn: $autoPlayTts)
+            Toggle("显示工具", isOn: $showToolMessages)
+            Divider()
+            Section("语速") {
+                ForEach([("快", 1.5), ("中", 1.2), ("标准", 1.0), ("慢", 0.9)], id: \.1) { label, value in
+                    Button {
+                        ttsSpeedStr = String(format: "%.1f", value)
+                    } label: {
+                        HStack {
+                            Text(label)
+                            if ttsSpeed == value { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.body)
+                .symbolVariant(autoPlayTts ? .fill : .none)
+                .foregroundStyle(autoPlayTts ? Color.orange : .secondary)
+        }
     }
 
     private var emptyChatWelcomeView: some View {
@@ -163,8 +205,9 @@ struct ChatView: View {
     @ViewBuilder
     private var chatMessageList: some View {
         LazyVStack(alignment: .leading, spacing: 12) {
-            ForEach(viewModel.displayBlocks) { block in
-                ChatDisplayBlockView(block: block, ttsState: ttsState, onPlayTts: { playTTS($0) })
+            ForEach(Array(viewModel.displayBlocks.enumerated()), id: \.element.id) { idx, block in
+                let isLastBlock = idx == viewModel.displayBlocks.count - 1
+                ChatDisplayBlockView(block: block, ttsState: ttsState, showToolMessages: showToolMessages, isLoading: viewModel.isLoading, isLastBlock: isLastBlock, onPlayTts: { playTTS($0) })
                     .id(block.id)
             }
             if viewModel.displayBlocks.isEmpty {
@@ -217,7 +260,7 @@ struct ChatView: View {
         HStack(alignment: .bottom, spacing: 12) {
             VoiceModeToggleButton(
                 isVoiceMode: isVoiceMode,
-                isLoading: viewModel.isLoading,
+                isLoading: viewModel.isLoading || viewModel.isRestoringHistory,
                 onToggle: { isVoiceMode.toggle() }
             )
 
@@ -230,7 +273,7 @@ struct ChatView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
                 } else {
-                    SendButton(enabled: !inputText.trimmingCharacters(in: .whitespaces).isEmpty) { sendText() }
+                    SendButton(enabled: !inputText.trimmingCharacters(in: .whitespaces).isEmpty && !viewModel.isRestoringHistory) { sendText() }
                 }
             }
         }
@@ -299,15 +342,33 @@ struct ChatView: View {
         }
     }
 
+    private func buildAsrPrompt(from blocks: [ChatDisplayBlock]) -> String? {
+        let last2 = Array(blocks.suffix(2))
+        guard !last2.isEmpty else { return nil }
+        let maxChars = 200
+        let parts = last2.compactMap { block -> String? in
+            let (role, text): (String, String) = switch block {
+            case .human(_, let t): ("用户", t)
+            case .aiBlock(_, let t, _, _): ("AI", t)
+            }
+            let truncated = text.count > maxChars ? String(text.prefix(maxChars)) + "…" : text
+            guard !truncated.isEmpty else { return nil }
+            return "\(role)：\(truncated)"
+        }
+        guard !parts.isEmpty else { return nil }
+        return "主题：和AI健身教练聊天，前两个对话（截取200字符）：\n" + parts.joined(separator: "\n")
+    }
+
     private func stopVoiceRecordingAndSend() {
         guard let data = recorder.stopRecording() else { return }
         voiceInputState = .uploading
         voiceError = nil
+        let prompt = buildAsrPrompt(from: viewModel.displayBlocks)
         Task {
             do {
                 let client = VoiceService(baseURL: apiBaseURL, authToken: auth.token)
                 await MainActor.run { voiceInputState = .converting }
-                let text = try await client.speechToText(audioData: data, contentType: "audio/x-caf")
+                let text = try await client.speechToText(audioData: data, contentType: "audio/x-caf", prompt: prompt)
                 await MainActor.run {
                     voiceInputState = .idle
                     if !text.isEmpty {
@@ -328,16 +389,17 @@ struct ChatView: View {
         voiceInputState = .idle
     }
 
-    private func playTTS(_ text: String) {
+    private func playTTS(_ text: String, speed: Double? = nil) {
         if case .loading = ttsState { return }
         if case .playing(let t) = ttsState, t == text { return }
         ttsState = .loading(text)
         voiceError = nil
+        let sp = speed ?? ttsSpeed
         Task {
             do {
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
                 let client = VoiceService(baseURL: apiBaseURL, authToken: auth.token)
-                let data = try await client.textToSpeech(text: text)
+                let data = try await client.textToSpeech(text: text, speed: sp)
                 let player = try AVAudioPlayer(data: data)
                 player.prepareToPlay()
                 player.play()
@@ -455,6 +517,7 @@ struct HoldToRecordButton: View {
             .onChanged { value in
                 if !hasStarted && value.translation.height < 20 {
                     hasStarted = true
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     onStart()
                 }
                 dragOffset = value.translation.height
@@ -572,6 +635,9 @@ struct BatterySegmentsBar: View {
 struct ChatDisplayBlockView: View {
     let block: ChatDisplayBlock
     let ttsState: TtsState
+    let showToolMessages: Bool
+    let isLoading: Bool
+    let isLastBlock: Bool
     let onPlayTts: ((String) -> Void)?
     @State private var toolsExpanded = false
 
@@ -586,62 +652,83 @@ struct ChatDisplayBlockView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         case .aiBlock(_, let aiText, let toolCalls, let toolResults):
-            HStack(alignment: .top, spacing: 10) {
-                CoachAvatar(size: 36, isSpeaking: false)
-                VStack(alignment: .leading, spacing: 6) {
-                    if !aiText.isEmpty {
-                        MarkdownText(text: aiText)
-                            .padding(12)
-                            .background(Color.gray.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                        if let play = onPlayTts {
-                            TtsButton(text: aiText, ttsState: ttsState, onPlay: play)
+            let hasToolActivity = !toolCalls.isEmpty || !toolResults.isEmpty
+            let shouldShowAsLoading = !showToolMessages && hasToolActivity && aiText.isEmpty && isLoading && isLastBlock
+            let shouldHide = !showToolMessages && hasToolActivity && aiText.isEmpty && (!isLoading || !isLastBlock)
+            Group {
+                if shouldHide {
+                    EmptyView()
+                } else if shouldShowAsLoading {
+                    HStack(alignment: .top, spacing: 10) {
+                        CoachAvatar(size: 36, isSpeaking: false)
+                        HStack {
+                            ProgressView()
+                            Text("执行中...")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
+                        .padding(12)
+                        Spacer(minLength: 50)
                     }
-                    if !toolCalls.isEmpty {
-                        ForEach(Array(toolCalls.enumerated()), id: \.offset) { _, tc in
-                            HStack(spacing: 6) {
-                                Image(systemName: "wrench.and.screwdriver")
-                                    .font(.caption)
-                                Text("执行: \(tc.name)")
-                                    .font(.caption)
-                                if !tc.args.isEmpty {
-                                    Text(tc.args)
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                        .lineLimit(2)
+                } else {
+                    HStack(alignment: .top, spacing: 10) {
+                        CoachAvatar(size: 36, isSpeaking: false)
+                        VStack(alignment: .leading, spacing: 6) {
+                            if !aiText.isEmpty {
+                                MarkdownText(text: aiText)
+                                    .padding(12)
+                                    .background(Color.gray.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                if let play = onPlayTts {
+                                    TtsButton(text: aiText, ttsState: ttsState, onPlay: play)
                                 }
                             }
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.blue.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                    }
-                    let toolCount = toolResults.count
-                    if toolCount > 0 {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) { toolsExpanded.toggle() }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: toolsExpanded ? "chevron.down" : "chevron.right")
-                                    .font(.caption2)
-                                Text(toolsExpanded ? "收起" : "展开")
-                                    .font(.caption)
-                                Text("工具调用 (\(toolCount))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                            if showToolMessages && !toolCalls.isEmpty {
+                                ForEach(Array(toolCalls.enumerated()), id: \.offset) { _, tc in
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "wrench.and.screwdriver")
+                                            .font(.caption)
+                                        Text("执行: \(tc.name)")
+                                            .font(.caption)
+                                        if !tc.args.isEmpty {
+                                            Text(tc.args)
+                                                .font(.caption2)
+                                                .foregroundStyle(.tertiary)
+                                                .lineLimit(2)
+                                        }
+                                    }
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.blue.opacity(0.1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                            }
+                            let toolCount = toolResults.count
+                            if showToolMessages && toolCount > 0 {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) { toolsExpanded.toggle() }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: toolsExpanded ? "chevron.down" : "chevron.right")
+                                            .font(.caption2)
+                                        Text(toolsExpanded ? "收起" : "展开")
+                                            .font(.caption)
+                                        Text("工具调用 (\(toolCount))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                if toolsExpanded {
+                                    ForEach(toolResults) { tr in
+                                        ToolResultRow(item: tr)
+                                    }
+                                }
                             }
                         }
-                        .buttonStyle(.plain)
-                        if toolsExpanded {
-                            ForEach(toolResults) { tr in
-                                ToolResultRow(item: tr)
-                            }
-                        }
+                        Spacer(minLength: 50)
                     }
                 }
-                Spacer(minLength: 50)
             }
         }
     }

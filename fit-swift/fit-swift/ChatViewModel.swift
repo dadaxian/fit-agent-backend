@@ -60,8 +60,15 @@ final class ChatViewModel: ObservableObject {
         apiClient = client
     }
 
-    /// 恢复历史状态（fetchStateHistory），在登录后、有持久化 threadId 时调用
+    /// 恢复历史状态（fetchStateHistory），在登录后调用。
+    /// 始终调用 get-or-create 以服务端 users.active_thread_id 为准，与 Web 行为一致。
     func restoreStateIfNeeded() async {
+        do {
+            threadId = try await apiClient.getOrCreateThread()
+        } catch {
+            threadId = nil
+            return
+        }
         guard let tid = threadId, !tid.isEmpty else { return }
         isRestoringHistory = true
         defer { isRestoringHistory = false }
@@ -85,7 +92,8 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    func newChat() {
+    /// 用户登出时清除 threadId（下次登录会 get-or-create 拿回同一 thread）
+    func onLogout() {
         streamTask?.cancel()
         streamTask = nil
         sendInProgress = false
@@ -96,12 +104,6 @@ final class ChatViewModel: ObservableObject {
         error = nil
     }
 
-    /// 用户登出时清除 threadId
-    func onLogout() {
-        threadId = nil
-        newChat()
-    }
-
     func send(text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isLoading, !sendInProgress else { return }
@@ -109,7 +111,11 @@ final class ChatViewModel: ObservableObject {
 
         let humanMsg = ChatMessage(id: UUID().uuidString, isHuman: true, text: trimmed)
         messages.append(humanMsg)
-        displayBlocks.append(.human(id: humanMsg.id, text: trimmed))
+        if threadId == nil {
+            displayBlocks = [.human(id: humanMsg.id, text: trimmed)]
+        } else {
+            displayBlocks.append(.human(id: humanMsg.id, text: trimmed))
+        }
         currentAIResponse = ""
         error = nil
 
@@ -190,7 +196,7 @@ final class ChatViewModel: ObservableObject {
 
         do {
             if threadId == nil {
-                threadId = try await apiClient.createThread()
+                threadId = try await apiClient.getOrCreateThread()
             }
             guard let tid = threadId else { return }
 
@@ -221,7 +227,10 @@ final class ChatViewModel: ObservableObject {
                     fullAI = lastAI
                     currentAIResponse = lastAI
                 }
-                displayBlocks = streamBlocks
+                // 避免用旧状态覆盖：若 stream 返回的块数少于当前（如首帧尚未包含新 human），不替换
+                if streamBlocks.count >= displayBlocks.count {
+                    displayBlocks = streamBlocks
+                }
             }
 
             if !fullAI.isEmpty {

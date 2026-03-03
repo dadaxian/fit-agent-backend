@@ -14,13 +14,18 @@ if not JWT_SECRET or JWT_SECRET == "change-me-in-production":
     warnings.warn("JWT_SECRET 未设置，请设置环境变量 JWT_SECRET")
 
 
-def _decode_jwt(token: str) -> str | None:
+def decode_jwt_user_id(token: str) -> str | None:
+    """解析 JWT，返回 user_id（sub）。供 custom_routes 等复用。"""
     import jwt
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         return payload.get("sub")
     except Exception:
         return None
+
+
+def _decode_jwt(token: str) -> str | None:
+    return decode_jwt_user_id(token)
 
 
 @auth.authenticate

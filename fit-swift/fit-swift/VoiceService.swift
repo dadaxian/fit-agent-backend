@@ -18,8 +18,8 @@ final class VoiceService {
         }
     }
 
-    /// 语音转文字
-    func speechToText(audioData: Data, contentType: String = "audio/webm") async throws -> String {
+    /// 语音转文字。prompt 可选，提供前文对话作为上下文纠偏（智谱 ASR 支持）。
+    func speechToText(audioData: Data, contentType: String = "audio/webm", prompt: String? = nil) async throws -> String {
         let url = URL(string: "\(baseURL)/voice/asr")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -28,11 +28,21 @@ final class VoiceService {
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
+        func appendField(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.webm\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
         body.append(audioData)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        body.append("\r\n".data(using: .utf8)!)
+        if let p = prompt, !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let trimmed = String(p.prefix(8000))
+            appendField("prompt", trimmed)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
 
         let (data, res) = try await URLSession.shared.data(for: req)
@@ -44,8 +54,8 @@ final class VoiceService {
         return (json?["text"] as? String) ?? ""
     }
 
-    /// 文字转语音，返回音频数据
-    func textToSpeech(text: String) async throws -> Data {
+    /// 文字转语音，返回音频数据。speed: 0.9 慢 / 1.0 标准 / 1.2 中 / 1.5 快
+    func textToSpeech(text: String, speed: Double = 1.5) async throws -> Data {
         let url = URL(string: "\(baseURL)/voice/tts")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -61,7 +71,7 @@ final class VoiceService {
         }
         appendField("text", text)
         appendField("voice", "female")
-        appendField("speed", "1.5")
+        appendField("speed", String(format: "%.1f", speed))
         appendField("volume", "1.0")
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
