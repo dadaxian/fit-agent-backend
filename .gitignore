@@ -37,3 +37,6 @@ htmlcov/
 
 # 用户工作区（run_command 产出）
 workspace/
+
+# 密钥
+.person_config

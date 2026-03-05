@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from typing import Any, Dict, List
+from datetime import datetime
 
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -10,6 +11,8 @@ from langgraph.runtime import Runtime
 
 from fit_agent.context import Context
 from fit_agent.prompts import get_system_prompt
+from fit_agent.memory import apply_forgetting_to_messages, build_memory_context, update_memory_for_window
+from fit_agent.time_utils import now_with_tz
 from fit_agent.tools import get_tool_by_name, get_tools, set_current_user_id
 from fit_agent.skills_loader import ensure_workspace_skills, get_skill_list
 
@@ -32,6 +35,7 @@ async def agent_node(
     from fit_agent.utils import load_chat_model
 
     messages = list(state.get("messages") or [])
+    original_messages = list(messages)
     configurable = (config or {}).get("configurable") or {}
     # 优先从 auth 获取 identity（登录用户 id），否则 user_id 或匿名
     auth_user = configurable.get("langgraph_auth_user") or {}
@@ -47,8 +51,17 @@ async def agent_node(
     # ChatZhipuAI 仅支持 tool_choice="auto"，无法强制；需用支持工具调用的模型（如 glm-4.7-flash）
     llm_with_tools = model.bind_tools(tools)
 
-    all_messages = [SystemMessage(content=system_prompt)] + messages
+    memory_context = build_memory_context(user_id)
+    messages = apply_forgetting_to_messages(user_id, messages)
+    all_messages = [SystemMessage(content=system_prompt)]
+    if memory_context:
+        all_messages.append(SystemMessage(content=memory_context))
+    all_messages += messages
     response = await llm_with_tools.ainvoke(all_messages, config=config or {})
+    if isinstance(response, AIMessage):
+        extra = dict(getattr(response, "additional_kwargs", {}) or {})
+        extra.setdefault("timestamp", now_with_tz().isoformat())
+        response = response.copy(update={"additional_kwargs": extra})
 
     tool_calls = getattr(response, "tool_calls", None) or []
     consecutive = 0 if tool_calls else (state.get("consecutive_no_tool_calls", 0) + 1)
@@ -66,6 +79,7 @@ async def agent_node(
         tool_calls = getattr(response, "tool_calls", None) or []
         consecutive = 0 if tool_calls else consecutive
 
+    asyncio.create_task(update_memory_for_window(user_id, original_messages + [response], model))
     return {"messages": [response], "consecutive_no_tool_calls": consecutive}
 
 
@@ -117,10 +131,20 @@ async def _execute_single_tool(
             result = await tool_instance.ainvoke(args, config=config or {})
         else:
             result = tool_instance.invoke(args, config=config or {})
-        return ToolMessage(content=str(result), tool_call_id=call_id, name=name)
+        return ToolMessage(
+            content=str(result),
+            tool_call_id=call_id,
+            name=name,
+            additional_kwargs={"timestamp": now_with_tz().isoformat()},
+        )
     except Exception as e:
         logger.exception(f"工具调用失败 {name}")
-        return ToolMessage(content=f"工具调用失败: {str(e)}", tool_call_id=call_id, name=name)
+        return ToolMessage(
+            content=f"工具调用失败: {str(e)}",
+            tool_call_id=call_id,
+            name=name,
+            additional_kwargs={"timestamp": now_with_tz().isoformat()},
+        )
 
 
 async def tools_node(state: Dict[str, Any], config: RunnableConfig) -> Dict[str, Any]:

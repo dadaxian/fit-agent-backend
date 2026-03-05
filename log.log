@@ -1,0 +1,256 @@
+IntegrityError('(psycopg.errors.UniqueViolation) duplicate key value violates unique constraint "uq_message_memory_user_hash"\nDETAIL:  Key (user_id, message_hash)=(304bcc18-9d14-465b-bfea-6d30e267657b, b0c908c261fe754f4493041b6981638670548f7eca6b830b73e5a7b701143a61) already exists.')Traceback (most recent call last):
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 2125, in _exec_insertmany_context
+    dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~^
+        cursor,
+        ^^^^^^^
+    ...<2 lines>...
+        context,
+        ^^^^^^^^
+    )
+    ^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+
+
+psycopg.errors.UniqueViolation: duplicate key value violates unique constraint "uq_message_memory_user_hash"
+DETAIL:  Key (user_id, message_hash)=(304bcc18-9d14-465b-bfea-6d30e267657b, b0c908c261fe754f4493041b6981638670548f7eca6b830b73e5a7b701143a61) already exists.
+
+
+
+The above exception was the direct cause of the following exception:
+
+
+
+Traceback (most recent call last):
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/main.py", line 2997, in astream
+    async for _ in runner.atick(
+    ...<13 lines>...
+            yield o
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/_runner.py", line 410, in atick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        timeout_exc_cls=asyncio.TimeoutError,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/_runner.py", line 520, in _panic_or_proceed
+    raise exc
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/_retry.py", line 163, in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/_internal/_runnable.py", line 705, in ainvoke
+    input = await asyncio.create_task(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        step.ainvoke(input, config, **kwargs), context=context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/_internal/_runnable.py", line 473, in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py", line 53, in agent_node
+    messages = apply_forgetting_to_messages(user_id, messages)
+
+
+  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/memory.py", line 117, in apply_forgetting_to_messages
+    with get_db() as db:
+         ~~~~~~^^
+
+
+  File "/Users/guzhengzhao/.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/contextlib.py", line 148, in __exit__
+    next(self.gen)
+    ~~~~^^^^^^^^^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/database.py", line 42, in get_db
+    db.commit()
+    ~~~~~~~~~^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py", line 2030, in commit
+    trans.commit(_to_root=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+
+
+  File "<string>", line 2, in commit
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py", line 1311, in commit
+    self._prepare_impl()
+    ~~~~~~~~~~~~~~~~~~^^
+
+
+  File "<string>", line 2, in _prepare_impl
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py", line 1286, in _prepare_impl
+    self.session.flush()
+    ~~~~~~~~~~~~~~~~~~^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py", line 4331, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py", line 4427, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/unitofwork.py", line 466, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper,
+        ^^^^^^^^^^^^
+    ...<3 lines>...
+        insert,
+        ^^^^^^^
+    )
+    ^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/orm/persistence.py", line 1143, in _emit_insert_statements
+    result = connection.execute(
+        statement, multiparams, execution_options=execution_options
+    )
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 1844, in _execute_context
+    return self._exec_insertmany_context(dialect, context)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 2133, in _exec_insertmany_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e,
+        ^^
+    ...<4 lines>...
+        is_sub_exec=True,
+        ^^^^^^^^^^^^^^^^^
+    )
+    ^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 2125, in _exec_insertmany_context
+    dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~^
+        cursor,
+        ^^^^^^^
+    ...<2 lines>...
+        context,
+        ^^^^^^^^
+    )
+    ^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+
+
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+
+
+sqlalchemy.exc.IntegrityError: (psycopg.errors.UniqueViolation) duplicate key value violates unique constraint "uq_message_memory_user_hash"
+DETAIL:  Key (user_id, message_hash)=(304bcc18-9d14-465b-bfea-6d30e267657b, b0c908c261fe754f4493041b6981638670548f7eca6b830b73e5a7b701143a61) already exists.
+[SQL: INSERT INTO message_memory (id, user_id, message_hash, role, content, importance_score, memory_state) VALUES (%(id__0)s::UUID, %(user_id__0)s::UUID, %(message_hash__0)s::VARCHAR, %(role__0)s::VARCHAR, %(content__0)s::VARCHAR, %(importance_score__0)s: ... 203 characters truncated ... ate__1)s::VARCHAR) RETURNING message_memory.created_at, message_memory.updated_at, message_memory.id]
+[parameters: {'importance_score__0': 3, 'id__0': 'ea26c4b1-2664-4a3c-976d-57df76d602ed', 'message_hash__0': 'b0c908c261fe754f4493041b6981638670548f7eca6b830b73e5a7b701143a61', 'user_id__0': '304bcc18-9d14-465b-bfea-6d30e267657b', 'role__0': 'ai', 'memory_state__0': 'forgotten', 'content__0': '', 'importance_score__1': 3, 'id__1': '6c231b48-d27f-471a-a352-332d6819efdf', 'message_hash__1': 'b0c908c261fe754f4493041b6981638670548f7eca6b830b73e5a7b701143a61', 'user_id__1': '304bcc18-9d14-465b-bfea-6d30e267657b', 'role__1': 'ai', 'memory_state__1': 'forgotten', 'content__1': ''}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+During task with name 'brain' and id '631bcf77-687c-2a66-5c69-19062c7f800b'

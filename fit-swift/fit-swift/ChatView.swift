@@ -1,17 +1,10 @@
 import SwiftUI
-import AVFoundation
 
 enum VoiceInputState: String {
     case idle
     case recording
     case uploading
     case converting
-}
-
-enum TtsState {
-    case idle
-    case loading(String)
-    case playing(String)
 }
 
 struct ChatView: View {
@@ -22,30 +15,33 @@ struct ChatView: View {
     @State private var voiceError: String?
     @State private var isVoiceMode = false
     @State private var voiceInputState: VoiceInputState = .idle
-    @State private var ttsState: TtsState = .idle
+    @State private var autoScrollEnabled = true
+    @State private var isUserDragging = false
     @AppStorage("apiBaseURL") private var apiBaseURL = "http://139.196.181.42:8000"
-    @AppStorage("autoPlayTts") private var autoPlayTts = false
-    @AppStorage("ttsSpeed") private var ttsSpeedStr = "1.0"
     @AppStorage("showToolMessages") private var showToolMessages = true
-    @State private var prevLoading = false
-
-    private var ttsSpeed: Double { Double(ttsSpeedStr) ?? 1.0 }
+    @AppStorage("useWaitMode") private var useWaitMode = false  // false=流式（默认），true=wait 非流式
 
     var body: some View {
         NavigationStack {
             chatMainContent
+                .overlay(alignment: .topTrailing) {
+                    DebugOverlayView(useWaitMode: useWaitMode)
+                        .padding(.top, 8)
+                        .padding(.trailing, 8)
+                }
                 .navigationTitle("AI 私教")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     if auth.isLoggedIn {
                         ToolbarItem(placement: .topBarLeading) {
-                            ttsSettingsBar
+                            settingsBar
                         }
                     }
                 }
         }
         .onAppear {
             updateAPIClient()
+            viewModel.useWaitMode = useWaitMode
             if auth.isLoggedIn {
                 Task { await viewModel.restoreStateIfNeeded() }
             }
@@ -56,6 +52,9 @@ struct ChatView: View {
         .onChange(of: auth.token) { _, _ in
             updateAPIClient()
         }
+        .onChange(of: useWaitMode) { _, v in
+            viewModel.useWaitMode = v
+        }
         .onChange(of: auth.isLoggedIn) { _, loggedIn in
             if !loggedIn {
                 viewModel.onLogout()
@@ -63,18 +62,6 @@ struct ChatView: View {
                 Task { await viewModel.restoreStateIfNeeded() }
             }
         }
-        .onChange(of: viewModel.isLoading) { wasLoading, nowLoading in
-            if prevLoading && !nowLoading && autoPlayTts {
-                if let last = viewModel.displayBlocks.last,
-                   case .aiBlock(_, let aiText, _, _) = last, !aiText.isEmpty {
-                    playTTS(aiText, speed: ttsSpeed)
-                } else if !viewModel.currentAIResponse.isEmpty {
-                    playTTS(viewModel.currentAIResponse, speed: ttsSpeed)
-                }
-            }
-            prevLoading = nowLoading
-        }
-        .onAppear { prevLoading = viewModel.isLoading }
     }
 
     @ViewBuilder
@@ -129,28 +116,15 @@ struct ChatView: View {
         chatInputRow
     }
 
-    private var ttsSettingsBar: some View {
+    private var settingsBar: some View {
         Menu {
-            Toggle("自动朗读", isOn: $autoPlayTts)
             Toggle("显示工具", isOn: $showToolMessages)
-            Divider()
-            Section("语速") {
-                ForEach([("快", 1.5), ("中", 1.2), ("标准", 1.0), ("慢", 0.9)], id: \.1) { label, value in
-                    Button {
-                        ttsSpeedStr = String(format: "%.1f", value)
-                    } label: {
-                        HStack {
-                            Text(label)
-                            if ttsSpeed == value { Image(systemName: "checkmark") }
-                        }
-                    }
-                }
-            }
+            Toggle("非流式(wait)", isOn: $useWaitMode)
+                .help("开启后使用 wait 接口，不流式但稳定")
         } label: {
             Image(systemName: "gearshape")
                 .font(.body)
-                .symbolVariant(autoPlayTts ? .fill : .none)
-                .foregroundStyle(autoPlayTts ? Color.orange : .secondary)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -170,13 +144,15 @@ struct ChatView: View {
     }
 
     private var restoringHistoryView: some View {
-        HStack {
+        HStack(spacing: 8) {
             ProgressView()
+                .scaleEffect(0.9)
             Text("恢复对话中...")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
     }
 
     private var chatScrollArea: some View {
@@ -186,12 +162,26 @@ struct ChatView: View {
                     .padding()
             }
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(
+                DragGesture()
+                    .onChanged { _ in
+                        if !isUserDragging { isUserDragging = true }
+                        if autoScrollEnabled { autoScrollEnabled = false }
+                    }
+                    .onEnded { _ in
+                        if isUserDragging {
+                            isUserDragging = false
+                        }
+                    }
+            )
             .onChange(of: viewModel.displayBlocks.count) { _, _ in
+                guard autoScrollEnabled else { return }
                 withAnimation {
-                    proxy.scrollTo(viewModel.displayBlocks.last?.id ?? "loading", anchor: .bottom)
+                    proxy.scrollTo(viewModel.displayBlocks.last?.id ?? "streaming", anchor: .bottom)
                 }
             }
             .onChange(of: viewModel.currentAIResponse) { _, _ in
+                guard autoScrollEnabled else { return }
                 proxy.scrollTo("streaming", anchor: .bottom)
             }
             .onChange(of: voiceInputState) { _, s in
@@ -199,54 +189,63 @@ struct ChatView: View {
                     proxy.scrollTo("voice-progress", anchor: .bottom)
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                if !autoScrollEnabled || isUserDragging {
+                    Button {
+                        autoScrollEnabled = true
+                        isUserDragging = false
+                        withAnimation {
+                            proxy.scrollTo(viewModel.displayBlocks.last?.id ?? "streaming", anchor: .bottom)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .padding(10)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay(
+                                Circle().stroke(Color.orange.opacity(0.6), lineWidth: 1)
+                            )
+                            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 24)
+                }
+            }
         }
     }
 
     @ViewBuilder
     private var chatMessageList: some View {
-        LazyVStack(alignment: .leading, spacing: 12) {
+        // 用 VStack 替代 LazyVStack，避免流式更新时懒加载导致新内容不显示
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(viewModel.displayBlocks.enumerated()), id: \.element.id) { idx, block in
                 let isLastBlock = idx == viewModel.displayBlocks.count - 1
-                ChatDisplayBlockView(block: block, ttsState: ttsState, showToolMessages: showToolMessages, isLoading: viewModel.isLoading, isLastBlock: isLastBlock, onPlayTts: { playTTS($0) })
+                ChatDisplayBlockView(block: block, showToolMessages: showToolMessages, isLoading: viewModel.isLoading, isLastBlock: isLastBlock)
                     .id(block.id)
             }
             if viewModel.displayBlocks.isEmpty {
                 ForEach(viewModel.messages) { msg in
                     ChatBubble(
                         message: msg,
+                        timestamp: msg.timestamp,
                         apiUrl: msg.isHuman ? apiBaseURL : nil,
                         showAvatar: !msg.isHuman,
-                        isStreaming: false,
-                        ttsState: ttsState,
-                        onPlayTts: { playTTS($0) }
+                        isStreaming: false
                     )
                     .id(msg.id)
                 }
             }
-            if viewModel.isLoading {
-                HStack {
-                    ProgressView()
-                    Text("思考中...")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(12)
-                .id("loading")
-            }
-            // 流式输出：当有 currentAIResponse 且最后一块不是 aiBlock 时，显示流式气泡（避免与 displayBlocks 重复）
+            // 流式输出：当有 currentAIResponse 时显示流式气泡
             if !viewModel.currentAIResponse.isEmpty {
-                let lastIsAI = viewModel.displayBlocks.last.map { if case .aiBlock = $0 { return true }; return false } ?? false
-                if !lastIsAI {
-                    ChatBubble(
-                        message: ChatMessage(id: "streaming", isHuman: false, text: viewModel.currentAIResponse),
-                        apiUrl: nil,
-                        showAvatar: true,
-                        isStreaming: true,
-                        ttsState: ttsState,
-                        onPlayTts: nil
-                    )
-                    .id("streaming")
-                }
+                ChatBubble(
+                    message: ChatMessage(id: "streaming", isHuman: false, text: viewModel.currentAIResponse, timestamp: Date()),
+                    timestamp: Date(),
+                    apiUrl: nil,
+                    showAvatar: true,
+                    isStreaming: true
+                )
+                .id("streaming")
             }
             if voiceInputState == .uploading || voiceInputState == .converting {
                 VoiceProgressBubble(state: voiceInputState)
@@ -348,8 +347,8 @@ struct ChatView: View {
         let maxChars = 200
         let parts = last2.compactMap { block -> String? in
             let (role, text): (String, String) = switch block {
-            case .human(_, let t): ("用户", t)
-            case .aiBlock(_, let t, _, _): ("AI", t)
+            case .human(_, let t, _): ("用户", t)
+            case .aiBlock(_, let t, _, _, _): ("AI", t)
             }
             let truncated = text.count > maxChars ? String(text.prefix(maxChars)) + "…" : text
             guard !truncated.isEmpty else { return nil }
@@ -389,30 +388,6 @@ struct ChatView: View {
         voiceInputState = .idle
     }
 
-    private func playTTS(_ text: String, speed: Double? = nil) {
-        if case .loading = ttsState { return }
-        if case .playing(let t) = ttsState, t == text { return }
-        ttsState = .loading(text)
-        voiceError = nil
-        let sp = speed ?? ttsSpeed
-        Task {
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-                let client = VoiceService(baseURL: apiBaseURL, authToken: auth.token)
-                let data = try await client.textToSpeech(text: text, speed: sp)
-                let player = try AVAudioPlayer(data: data)
-                player.prepareToPlay()
-                player.play()
-                await MainActor.run { ttsState = .playing(text) }
-                while player.isPlaying {
-                    try await Task.sleep(nanoseconds: 100_000_000)
-                }
-            } catch {
-                await MainActor.run { voiceError = error.localizedDescription }
-            }
-            await MainActor.run { ttsState = .idle }
-        }
-    }
 }
 
 // MARK: - 语音/键盘切换按钮（带按下动画）
@@ -632,44 +607,43 @@ struct BatterySegmentsBar: View {
     }
 }
 
+private func formatTimestamp(_ date: Date) -> String {
+    let f = DateFormatter()
+    f.dateFormat = "HH:mm:ss"
+    f.locale = Locale(identifier: "zh_CN")
+    return f.string(from: date)
+}
+
 struct ChatDisplayBlockView: View {
     let block: ChatDisplayBlock
-    let ttsState: TtsState
     let showToolMessages: Bool
     let isLoading: Bool
     let isLastBlock: Bool
-    let onPlayTts: ((String) -> Void)?
     @State private var toolsExpanded = false
 
     var body: some View {
         switch block {
-        case .human(_, let text):
+        case .human(_, let text, let timestamp):
             HStack {
                 Spacer(minLength: 50)
-                MarkdownText(text: text)
-                    .padding(12)
-                    .background(Color.orange.opacity(0.2))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                VStack(alignment: .trailing, spacing: 4) {
+                    MarkdownText(text: text)
+                        .padding(12)
+                        .background(Color.orange.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    if let ts = timestamp {
+                        Text(formatTimestamp(ts))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
-        case .aiBlock(_, let aiText, let toolCalls, let toolResults):
+        case .aiBlock(_, let aiText, let toolCalls, let toolResults, let timestamp):
             let hasToolActivity = !toolCalls.isEmpty || !toolResults.isEmpty
-            let shouldShowAsLoading = !showToolMessages && hasToolActivity && aiText.isEmpty && isLoading && isLastBlock
-            let shouldHide = !showToolMessages && hasToolActivity && aiText.isEmpty && (!isLoading || !isLastBlock)
+            let shouldHide = !showToolMessages && hasToolActivity && aiText.isEmpty
             Group {
                 if shouldHide {
                     EmptyView()
-                } else if shouldShowAsLoading {
-                    HStack(alignment: .top, spacing: 10) {
-                        CoachAvatar(size: 36, isSpeaking: false)
-                        HStack {
-                            ProgressView()
-                            Text("执行中...")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(12)
-                        Spacer(minLength: 50)
-                    }
                 } else {
                     HStack(alignment: .top, spacing: 10) {
                         CoachAvatar(size: 36, isSpeaking: false)
@@ -679,8 +653,10 @@ struct ChatDisplayBlockView: View {
                                     .padding(12)
                                     .background(Color.gray.opacity(0.2))
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
-                                if let play = onPlayTts {
-                                    TtsButton(text: aiText, ttsState: ttsState, onPlay: play)
+                                if let ts = timestamp {
+                                    Text(formatTimestamp(ts))
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
                                 }
                             }
                             if showToolMessages && !toolCalls.isEmpty {
@@ -786,52 +762,12 @@ struct ToolResultRow: View {
     }
 }
 
-struct TtsButton: View {
-    let text: String
-    let ttsState: TtsState
-    let onPlay: (String) -> Void
-
-    private var isLoading: Bool {
-        if case .loading(let t) = ttsState { return t == text }
-        return false
-    }
-    private var isPlaying: Bool {
-        if case .playing(let t) = ttsState { return t == text }
-        return false
-    }
-
-    var body: some View {
-        Button {
-            onPlay(text)
-        } label: {
-            if isLoading {
-                HStack(spacing: 4) {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                    Text("转换中")
-                        .font(.caption)
-                }
-            } else if isPlaying {
-                Label("播放中", systemImage: "speaker.wave.2.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            } else {
-                Label("朗读", systemImage: "speaker.wave.2.fill")
-                    .font(.caption)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(isLoading)
-    }
-}
-
 struct ChatBubble: View {
     let message: ChatMessage
+    var timestamp: Date? = nil
     var apiUrl: String? = nil
     var showAvatar: Bool = false
     var isStreaming: Bool = false
-    let ttsState: TtsState
-    let onPlayTts: ((String) -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -848,16 +784,17 @@ struct ChatBubble: View {
                     .foregroundStyle(.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
+                if let ts = timestamp ?? message.timestamp {
+                    Text(formatTimestamp(ts))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
                 if let url = apiUrl {
                     Text(url)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                }
-
-                if !message.isHuman, let play = onPlayTts {
-                    TtsButton(text: message.text, ttsState: ttsState, onPlay: play)
                 }
             }
 
