@@ -89,20 +89,41 @@ def get_memory_snapshot(user_id: str) -> MemorySnapshot:
                 updated_at=None,
             )
         
+        meta_data = row.meta_data or {}
+        if isinstance(meta_data, str):
+            try:
+                import json
+                meta_data = json.loads(meta_data)
+            except:
+                meta_data = {}
+        
         # 确保读取的是最原始的数据库值
         key_facts = row.key_facts or []
         if isinstance(key_facts, dict):
             key_facts = list(key_facts.values())
+        elif isinstance(key_facts, str):
+            try:
+                import json
+                key_facts = json.loads(key_facts)
+            except:
+                key_facts = []
+
         scenarios = row.scenarios or []
         if isinstance(scenarios, dict):
             scenarios = list(scenarios.values())
+        elif isinstance(scenarios, str):
+            try:
+                import json
+                scenarios = json.loads(scenarios)
+            except:
+                scenarios = []
             
         return MemorySnapshot(
             summary=row.summary_text,
             key_facts=key_facts,
             scenarios=scenarios,
             global_background=row.global_background,
-            meta_data=row.meta_data or {},
+            meta_data=meta_data,
             updated_at=row.updated_at,
         )
 
