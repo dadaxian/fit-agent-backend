@@ -66,10 +66,13 @@ async def agent_node(
     memory_model_name = os.environ.get("MEMORY_MODEL") or ctx.model
     background_model = load_chat_model(memory_model_name)
     
+    # 获取当前消息列表的副本，用于后台任务
+    bg_messages = list(messages)
+    
     async def _bg_task():
         async def on_debug_log(msg: str):
             await adispatch_custom_event("memory_debug", {"message": msg}, config=config)
-        await update_memory_for_window(user_id, messages, background_model, on_debug_log=on_debug_log)
+        await update_memory_for_window(user_id, bg_messages, background_model, on_debug_log=on_debug_log)
     
     asyncio.create_task(_bg_task())
 
