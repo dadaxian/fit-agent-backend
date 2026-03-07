@@ -25,7 +25,7 @@ struct ChatView: View {
         NavigationStack {
             chatMainContent
                 .overlay(alignment: .topTrailing) {
-                    DebugOverlayView(useWaitMode: useWaitMode)
+                    DebugOverlayView()
                         .padding(.top, 8)
                         .padding(.trailing, 8)
                 }

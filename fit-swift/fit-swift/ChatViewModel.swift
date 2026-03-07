@@ -248,14 +248,12 @@ final class ChatViewModel: ObservableObject {
             }
 
             DebugLogger.shared.log("runStream: streamRun 请求开始")
-            DebugLogger.shared.startStreamCapture()
             var eventCount = 0
             hasLiveMessages = false
 
             for try await evt in try await apiClient.streamRun(threadId: tid, messages: inputMessages) {
                 if Task.isCancelled { break }
                 eventCount += 1
-                DebugLogger.shared.recordStreamEvent(event: evt.event, data: evt.data)
                 
                 guard let data = evt.data else { continue }
 
@@ -390,6 +388,15 @@ final class ChatViewModel: ObservableObject {
             if let t = extractAIText(from: data) {
                 newAIText = t
             }
+        } else if event == "on_custom_event" {
+            if let name = data["name"] as? String, name == "memory_debug",
+               let payload = data["data"] as? [String: Any],
+               let msg = payload["message"] as? String {
+                Task { @MainActor in
+                    DebugLogger.shared.log(msg)
+                }
+            }
+            return nil
         } else {
             return nil
         }

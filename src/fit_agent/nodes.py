@@ -53,6 +53,26 @@ async def agent_node(
 
     memory_context = build_memory_context(user_id)
     messages = apply_forgetting_to_messages(user_id, messages)
+
+    # 记忆更新逻辑：
+    # 1. 真正的并行：在对话 LLM 启动前，先启动后台记忆任务。
+    # 2. 该任务处理当前已有的历史消息（messages），不等待本次对话回复。
+    # 3. 使用独立的 background_model 避免状态竞争。
+    from fit_agent.utils import load_chat_model
+    from langchain_core.callbacks.manager import adispatch_custom_event
+    import os
+    
+    # 优先从环境变量加载记忆专用模型，否则回退到主模型
+    memory_model_name = os.environ.get("MEMORY_MODEL") or ctx.model
+    background_model = load_chat_model(memory_model_name)
+    
+    async def _bg_task():
+        async def on_debug_log(msg: str):
+            await adispatch_custom_event("memory_debug", {"message": msg}, config=config)
+        await update_memory_for_window(user_id, messages, background_model, on_debug_log=on_debug_log)
+    
+    asyncio.create_task(_bg_task())
+
     all_messages = [SystemMessage(content=system_prompt)]
     if memory_context:
         all_messages.append(SystemMessage(content=memory_context))
@@ -79,7 +99,6 @@ async def agent_node(
         tool_calls = getattr(response, "tool_calls", None) or []
         consecutive = 0 if tool_calls else consecutive
 
-    asyncio.create_task(update_memory_for_window(user_id, original_messages + [response], model))
     return {"messages": [response], "consecutive_no_tool_calls": consecutive}
 
 

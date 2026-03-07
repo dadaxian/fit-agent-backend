@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 调试日志：记录关键步骤及耗时，用于排查卡顿
+/// 极简调试日志：仅记录核心状态和内存窗口信息
 @MainActor
 final class DebugLogger: ObservableObject {
     static let shared = DebugLogger()
@@ -9,34 +9,21 @@ final class DebugLogger: ObservableObject {
         let id = UUID()
         let time: Date
         let message: String
-        let elapsed: TimeInterval?
 
         var displayText: String {
             let t = DateFormatter()
-            t.dateFormat = "HH:mm:ss.SSS"
-            let ts = t.string(from: time)
-            if let e = elapsed {
-                return "[\(ts)] \(message) (+\(String(format: "%.0f", e * 1000))ms"
-            }
-            return "[\(ts)] \(message)"
+            t.dateFormat = "HH:mm:ss"
+            return "[\(t.string(from: time))] \(message)"
         }
     }
 
     @Published private(set) var entries: [LogEntry] = []
-    private var lastLogTime: Date?
-    private let maxEntries = 50
-
-    /// 流式原始数据记录：每次 stream 请求的完整返回，便于复制分享
-    @Published private(set) var streamRawRecords: [String] = []
-    @Published private(set) var streamRecordCount = 0
+    private let maxEntries = 100
 
     private init() {}
 
     func log(_ message: String) {
-        let now = Date()
-        let elapsed = lastLogTime.map { now.timeIntervalSince($0) }
-        lastLogTime = now
-        let entry = LogEntry(time: now, message: message, elapsed: elapsed)
+        let entry = LogEntry(time: Date(), message: message)
         entries.insert(entry, at: 0)
         if entries.count > maxEntries {
             entries.removeLast()
@@ -45,108 +32,84 @@ final class DebugLogger: ObservableObject {
 
     func clear() {
         entries.removeAll()
-        lastLogTime = nil
-        streamRawRecords.removeAll()
-        streamRecordCount = 0
-    }
-
-    /// 开始记录本次流式请求的原始返回
-    func startStreamCapture() {
-        streamRawRecords.removeAll()
-        streamRecordCount = 0
-    }
-
-    /// 记录一条流式事件（event + data）
-    func recordStreamEvent(event: String, data: [String: Any]?) {
-        var dataJson = "null"
-        if let d = data, let jsonData = try? JSONSerialization.data(withJSONObject: d),
-           let s = String(data: jsonData, encoding: .utf8) {
-            dataJson = s
-        }
-        let line = "event: \(event)\ndata: \(dataJson)\n"
-        streamRawRecords.append(line)
-        streamRecordCount = streamRawRecords.count
-    }
-
-    /// 获取完整流式原始数据文本，便于复制
-    func getStreamCaptureText() -> String {
-        streamRawRecords.joined(separator: "\n")
-    }
-
-    /// 清空流式记录
-    func clearStreamCapture() {
-        streamRawRecords.removeAll()
-        streamRecordCount = 0
     }
 }
 
 struct DebugOverlayView: View {
     @ObservedObject var logger = DebugLogger.shared
-    var useWaitMode: Bool = false
     @State private var expanded = false
     @State private var dragOffset: CGSize = .zero
-    @State private var copiedHint = false
 
     var body: some View {
-        VStack {
+        VStack(alignment: .trailing) {
             if expanded {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        Text("调试")
-                            .font(.caption)
-                            .fontWeight(.semibold)
+                        Text("系统调试日志")
+                            .font(.system(size: 12, weight: .bold))
                         Spacer()
                         Button("清空") { logger.clear() }
-                            .font(.caption2)
-                        if useWaitMode {
-                            Text("wait 模式")
-                                .font(.caption2)
-                                .foregroundStyle(.orange)
-                                .help("关闭「非流式」可启用流式并记录原始数据")
+                            .font(.system(size: 10))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Color.gray.opacity(0.2))
+                            .clipShape(Capsule())
+                        
+                        Button {
+                            expanded = false
+                        } label: {
+                            Image(systemName: "chevron.down.circle.fill")
+                                .foregroundStyle(.secondary)
                         }
-                        if logger.streamRecordCount > 0 {
-                            Button(copiedHint ? "已复制" : "复制流式原始数据") {
-                                UIPasteboard.general.string = logger.getStreamCaptureText()
-                                copiedHint = true
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedHint = false }
-                            }
-                            .font(.caption2)
-                            .foregroundStyle(copiedHint ? .green : .blue)
-                        }
-                        Button("收起") { expanded = false }
-                            .font(.caption2)
                     }
-                    .padding(4)
-                    if logger.streamRecordCount > 0 {
-                        Text("流式事件: \(logger.streamRecordCount) 条")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                    .padding(10)
+                    .background(Color.black.opacity(0.05))
+
+                    Divider()
+
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 2) {
+                        LazyVStack(alignment: .leading, spacing: 4) {
                             ForEach(logger.entries) { e in
                                 Text(e.displayText)
                                     .font(.system(size: 10, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.primary.opacity(0.8))
+                                    .padding(.horizontal, 10)
+                                    .textSelection(.enabled)
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
                     }
-                    .frame(height: 180)
+                    .frame(height: 200)
                 }
-                .padding(8)
                 .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .frame(width: 280)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+                .frame(width: 300)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+
             Button {
-                expanded.toggle()
+                withAnimation(.spring()) {
+                    expanded.toggle()
+                }
             } label: {
-                Image(systemName: expanded ? "xmark.circle.fill" : "ant.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(expanded ? Color.secondary : Color.orange)
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 44, height: 44)
+                        .shadow(color: .black.opacity(0.1), radius: 4)
+                    
+                    Image(systemName: expanded ? "terminal.fill" : "terminal")
+                        .font(.system(size: 20))
+                        .foregroundStyle(expanded ? .orange : .secondary)
+                }
             }
         }
+        .padding()
         .offset(dragOffset)
         .gesture(
             DragGesture()

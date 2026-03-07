@@ -49,7 +49,9 @@ class MemorySummary(Base):
     user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True)
     summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     key_facts: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
-    last_message_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    scenarios: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
+    global_background: Mapped[str | None] = mapped_column(Text, nullable=True)
+    meta_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -69,12 +71,11 @@ class MessageMemory(Base):
         default=lambda: str(uuid4()),
     )
     user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
-    message_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    message_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     importance_score: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     memory_state: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
-    embedding: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
