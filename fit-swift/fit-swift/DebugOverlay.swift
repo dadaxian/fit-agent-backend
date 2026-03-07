@@ -38,6 +38,7 @@ final class DebugLogger: ObservableObject {
 struct DebugOverlayView: View {
     @ObservedObject var logger = DebugLogger.shared
     @State private var expanded = false
+    @State private var isFullScreen = false
     @State private var dragOffset: CGSize = .zero
 
     var body: some View {
@@ -48,6 +49,18 @@ struct DebugOverlayView: View {
                         Text("系统调试日志")
                             .font(.system(size: 12, weight: .bold))
                         Spacer()
+                        
+                        Button(isFullScreen ? "退出全屏" : "全屏") {
+                            withAnimation(.spring()) {
+                                isFullScreen.toggle()
+                            }
+                        }
+                        .font(.system(size: 10))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.2))
+                        .clipShape(Capsule())
+                        
                         Button("清空") { logger.clear() }
                             .font(.system(size: 10))
                             .padding(.horizontal, 8)
@@ -57,6 +70,7 @@ struct DebugOverlayView: View {
                         
                         Button {
                             expanded = false
+                            isFullScreen = false
                         } label: {
                             Image(systemName: "chevron.down.circle.fill")
                                 .foregroundStyle(.secondary)
@@ -79,7 +93,7 @@ struct DebugOverlayView: View {
                         }
                         .padding(.vertical, 8)
                     }
-                    .frame(height: 200)
+                    .frame(height: isFullScreen ? UIScreen.main.bounds.height * 0.7 : 200)
                 }
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -88,13 +102,14 @@ struct DebugOverlayView: View {
                         .stroke(Color.orange.opacity(0.2), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-                .frame(width: 300)
+                .frame(width: isFullScreen ? UIScreen.main.bounds.width - 32 : UIScreen.main.bounds.width - 32)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             Button {
                 withAnimation(.spring()) {
                     expanded.toggle()
+                    if !expanded { isFullScreen = false }
                 }
             } label: {
                 ZStack {
@@ -109,7 +124,7 @@ struct DebugOverlayView: View {
                 }
             }
         }
-        .padding()
+        .padding(.horizontal, 16)
         .offset(dragOffset)
         .gesture(
             DragGesture()

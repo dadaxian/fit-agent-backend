@@ -249,13 +249,14 @@ async def update_memory_for_window(user_id: str, messages: list[Any], model, on_
 
     # 3. 强制限制：无论新增多少，只取最后 MEMORY_WINDOW_SIZE 条进行摘要
     if len(new_msgs) > MEMORY_WINDOW_SIZE:
+        await log(f"新增消息数 {len(new_msgs)} 超过窗口，截取最后 {MEMORY_WINDOW_SIZE} 条。")
         new_msgs = new_msgs[-MEMORY_WINDOW_SIZE:]
 
-    await log(f"待处理新增消息数: {len(new_msgs)} / 窗口阈值: {MEMORY_WINDOW_SIZE}")
+    await log(f"当前窗口计数: {len(new_msgs)} / {MEMORY_WINDOW_SIZE}")
 
     # 4. 严格检查：只有当真正的新消息数量达到窗口大小时才触发
     if len(new_msgs) < MEMORY_WINDOW_SIZE:
-        await log("增量不足，等待下一轮。")
+        await log(f"增量不足 ({len(new_msgs)} < {MEMORY_WINDOW_SIZE})，等待下一轮。")
         return
 
     await log("触发摘要与打分任务...")
