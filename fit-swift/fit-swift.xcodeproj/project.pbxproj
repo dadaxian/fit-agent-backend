@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4FAC81B82F5C247E008D03D0 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 4FAC81B72F5C247E008D03D0 /* MarkdownUI */; };
 		A1B2C3D4E5F6000000000001 /* fit-swiftApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000001 /* fit-swiftApp.swift */; };
 		A1B2C3D4E5F6000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000002 /* ContentView.swift */; };
 		A1B2C3D4E5F6000000000003 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000003 /* ChatView.swift */; };
@@ -59,6 +60,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4FAC81B82F5C247E008D03D0 /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,6 +155,9 @@
 				Base,
 			);
 			mainGroup = A5B2C3D4E5F6000000000001;
+			packageReferences = (
+				4FAC81B62F5C247E008D03D0 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
 			productRefGroup = A5B2C3D4E5F6000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -404,6 +409,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4FAC81B62F5C247E008D03D0 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4FAC81B72F5C247E008D03D0 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FAC81B62F5C247E008D03D0 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = AAB2C3D4E5F6000000000001 /* Project object */;
 }

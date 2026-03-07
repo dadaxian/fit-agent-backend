@@ -35,7 +35,6 @@ async def agent_node(
     from fit_agent.utils import load_chat_model
 
     messages = list(state.get("messages") or [])
-    original_messages = list(messages)
     configurable = (config or {}).get("configurable") or {}
     # 优先从 auth 获取 identity（登录用户 id），否则 user_id 或匿名
     auth_user = configurable.get("langgraph_auth_user") or {}
@@ -53,34 +52,6 @@ async def agent_node(
 
     memory_context = build_memory_context(user_id)
     messages = apply_forgetting_to_messages(user_id, messages)
-
-    # 记忆更新逻辑：
-    # 1. 真正的并行：在对话 LLM 启动前，先启动后台记忆任务。
-    # 2. 该任务处理当前已有的历史消息（messages），不等待本次对话回复。
-    # 3. 使用独立的 background_model 避免状态竞争。
-    from fit_agent.utils import load_chat_model
-    from langchain_core.callbacks.manager import adispatch_custom_event
-    import os
-    import sys
-    
-    # 优先从环境变量加载记忆专用模型，否则回退到主模型
-    memory_model_name = os.environ.get("MEMORY_MODEL") or ctx.model
-    background_model = load_chat_model(memory_model_name)
-    
-    # 获取当前消息列表的副本，用于后台任务
-    bg_messages = list(messages)
-    
-    async def _bg_task():
-        print(f"\n[DEBUG] 后台记忆任务启动: 用户={user_id}, 消息数={len(bg_messages)}", file=sys.stderr, flush=True)
-        async def on_debug_log(msg: str):
-            print(f"[DEBUG] 发送自定义事件: {msg}", file=sys.stderr, flush=True)
-            await adispatch_custom_event("memory_debug", {"message": msg}, config=config)
-        try:
-            await update_memory_for_window(user_id, bg_messages, background_model, on_debug_log=on_debug_log)
-        except Exception as e:
-            print(f"[DEBUG] 后台记忆任务崩溃: {str(e)}", file=sys.stderr, flush=True)
-    
-    asyncio.create_task(_bg_task())
 
     all_messages = [SystemMessage(content=system_prompt)]
     if memory_context:
@@ -111,20 +82,62 @@ async def agent_node(
     return {"messages": [response], "consecutive_no_tool_calls": consecutive}
 
 
-def _route_after_agent(state: Dict[str, Any]) -> str:
+def _route_after_agent(state: Dict[str, Any], config: RunnableConfig) -> str:
     """Agent 之后：有 tool_calls → tools；无且 task_complete → end；否则继续或强制 end。"""
     messages = state.get("messages") or []
     if not messages:
         return "end"
+    
+    # 提取 user_id 用于后台任务
+    configurable = (config or {}).get("configurable") or {}
+    auth_user = configurable.get("langgraph_auth_user") or {}
+    user_id = auth_user.get("identity") or configurable.get("user_id") or "dev"
+
     last = messages[-1]
+    
+    def trigger_memory_task():
+        """在对话彻底结束时，异步触发记忆更新任务。"""
+        from fit_agent.utils import load_chat_model
+        from langchain_core.callbacks.manager import adispatch_custom_event
+        from fit_agent.memory import update_memory_for_window
+        import os
+        import sys
+
+        memory_model_name = os.environ.get("MEMORY_MODEL") or "zhipuai/glm-4-flash"
+        background_model = load_chat_model(memory_model_name)
+        bg_messages = list(messages)
+
+        async def _bg_task():
+            print(f"\n[DEBUG] 对话结束，启动后台记忆任务: 用户={user_id}, 消息数={len(bg_messages)}", file=sys.stderr, flush=True)
+            async def on_debug_log(msg: str):
+                await adispatch_custom_event("memory_debug", {"message": msg}, config=config)
+            try:
+                await update_memory_for_window(user_id, bg_messages, background_model, on_debug_log=on_debug_log)
+            except Exception as e:
+                print(f"[DEBUG] 后台记忆任务崩溃: {str(e)}", file=sys.stderr, flush=True)
+        
+        # 修复：在路由函数（可能在线程池运行）中安全地启动异步任务
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_bg_task())
+        except RuntimeError:
+            # 如果当前没有运行中的 loop，说明可能在同步线程中，尝试获取主线程 loop 或直接创建新任务
+            # 在 LangGraph 路由中通常会有 loop，但为了稳健性：
+            asyncio.run_coroutine_threadsafe(_bg_task(), asyncio.get_event_loop())
+
     if not isinstance(last, AIMessage):
+        trigger_memory_task()
         return "end"
+    
     tool_calls = getattr(last, "tool_calls", None) or []
     if tool_calls:
         return "tools"
+    
     if state.get("task_complete"):
+        trigger_memory_task()
         return "end"
-    # 兜底：Agent 已给出文本回复但未调用 mark_task_done，视为隐式完成，避免无限循环
+    
+    # 兜底：Agent 已给出文本回复但未调用 mark_task_done，视为隐式完成
     content = getattr(last, "content", "") or ""
     text = ""
     if isinstance(content, str):
@@ -136,12 +149,20 @@ def _route_after_agent(state: Dict[str, Any]) -> str:
                 break
     if text:
         logger.info("Agent 已输出结论但未调用 mark_task_done，视为完成并结束")
+        trigger_memory_task()
         return "end"
+    
     consecutive = state.get("consecutive_no_tool_calls", 0)
     if consecutive >= MAX_CONSECUTIVE_NO_TOOL_CALLS:
         logger.warning(f"连续 {consecutive} 轮无 tool_calls 且未 mark_task_done，强制结束")
+        trigger_memory_task()
         return "end"
+    
     return "agent"
+
+
+def route_after_agent(state: Dict[str, Any], config: RunnableConfig) -> str:
+    return _route_after_agent(state, config)
 
 
 async def _execute_single_tool(
@@ -222,10 +243,6 @@ async def tools_node(state: Dict[str, Any], config: RunnableConfig) -> Dict[str,
         for tc in tool_calls
     )
     return {"messages": tool_messages, "task_complete": task_complete}
-
-
-def route_after_agent(state: Dict[str, Any]) -> str:
-    return _route_after_agent(state)
 
 
 def route_after_tools(state: Dict[str, Any]) -> str:
