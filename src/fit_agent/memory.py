@@ -215,7 +215,8 @@ async def update_memory_for_window(user_id: str, messages: list[Any], model, on_
     last_id = snap.meta_data.get("last_summarized_message_id")
     
     async def log(msg: str):
-        print(f"[MEMORY DEBUG] {msg}")
+        full_msg = f"[MEMORY DEBUG] {msg}"
+        print(full_msg, flush=True)
         if on_debug_log:
             await on_debug_log(msg)
 

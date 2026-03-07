@@ -61,6 +61,7 @@ async def agent_node(
     from fit_agent.utils import load_chat_model
     from langchain_core.callbacks.manager import adispatch_custom_event
     import os
+    import sys
     
     # 优先从环境变量加载记忆专用模型，否则回退到主模型
     memory_model_name = os.environ.get("MEMORY_MODEL") or ctx.model
@@ -70,9 +71,14 @@ async def agent_node(
     bg_messages = list(messages)
     
     async def _bg_task():
+        print(f"\n[DEBUG] 后台记忆任务启动: 用户={user_id}, 消息数={len(bg_messages)}", file=sys.stderr, flush=True)
         async def on_debug_log(msg: str):
+            print(f"[DEBUG] 发送自定义事件: {msg}", file=sys.stderr, flush=True)
             await adispatch_custom_event("memory_debug", {"message": msg}, config=config)
-        await update_memory_for_window(user_id, bg_messages, background_model, on_debug_log=on_debug_log)
+        try:
+            await update_memory_for_window(user_id, bg_messages, background_model, on_debug_log=on_debug_log)
+        except Exception as e:
+            print(f"[DEBUG] 后台记忆任务崩溃: {str(e)}", file=sys.stderr, flush=True)
     
     asyncio.create_task(_bg_task())
 
