@@ -15,6 +15,7 @@ from fit_agent.memory import apply_forgetting_to_messages, build_memory_context,
 from fit_agent.time_utils import now_with_tz
 from fit_agent.tools import get_tool_by_name, get_tools, set_current_user_id
 from fit_agent.skills_loader import ensure_workspace_skills, get_skill_list
+from fit_agent.ui_protocol import build_ui_state
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,27 @@ REMINDER_AFTER_CONSECUTIVE = 1  # 首次无 tool_call 即提醒
 MAX_CONSECUTIVE_NO_TOOL_CALLS = 2  # 最多重试 1 次后强制结束
 
 REMINDER_NO_CHOICE = """【系统提醒】你上一条消息只输出了文字，没有调用工具。你只能使用两个工具：run_command（执行命令）、mark_task_done（结束任务）。请在本轮必须二选一：继续则调用 run_command，结束则调用 mark_task_done。禁止只输出文字，禁止调用其他工具。"""
+
+
+def _extract_latest_human_text(messages: List[Any]) -> str:
+    for m in reversed(messages):
+        if getattr(m, "type", "") != "human":
+            continue
+        content = getattr(m, "content", "")
+        if isinstance(content, str):
+            text = content.strip()
+            if text:
+                return text
+        elif isinstance(content, list):
+            parts: List[str] = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    t = str(block.get("text") or "").strip()
+                    if t:
+                        parts.append(t)
+            if parts:
+                return " ".join(parts)
+    return ""
 
 
 async def agent_node(
@@ -61,6 +83,9 @@ async def agent_node(
     if isinstance(response, AIMessage):
         extra = dict(getattr(response, "additional_kwargs", {}) or {})
         extra.setdefault("timestamp", now_with_tz().isoformat())
+        # 新增：平台无关 UI 协议（给 iOS/Android/Web 各自渲染）
+        latest_human = _extract_latest_human_text(messages)
+        extra["ui_state"] = build_ui_state(latest_human)
         response = response.copy(update={"additional_kwargs": extra})
 
     tool_calls = getattr(response, "tool_calls", None) or []

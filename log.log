@@ -1,89 +1,60 @@
-(env313) guzhengzhao@Mac fit-agent % uv run aegra serve
-╭─────────────────────────────────────────────────────── Aegra Server ────────────────────────────────────────────────────────╮
-│ Starting Aegra production server                                                                                            │
-│                                                                                                                             │
-│ Host: 0.0.0.0                                                                                                               │
-│ Port: 8000                                                                                                                  │
-│ Config: /Users/guzhengzhao/project/fit-agent/aegra.json                                                                     │
-│ Env: /Users/guzhengzhao/project/fit-agent/.env                                                                              │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langchain_core/_api/deprecation.py:25: UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
-  from pydantic.v1.fields import FieldInfo as FieldInfoV1
-2026-03-07T09:50:08.010322Z [info     ] Loaded HTTP config from /Users/guzhengzhao/project/fit-agent/aegra.json [aegra_api.config] filename=config.py func_name=load_http_config lineno=151
-2026-03-07T09:50:08.010490Z [info     ] Loading custom app from ./custom_routes.py:app [aegra_api.core.app_loader] filename=app_loader.py func_name=load_custom_app lineno=32
-2026-03-07T09:50:08.029022Z [info     ] Successfully loaded custom app 'app' from ./custom_routes.py [aegra_api.core.app_loader] filename=app_loader.py func_name=load_custom_app lineno=85
-2026-03-07T09:50:08.029119Z [info     ] Custom app loaded successfully [aegra_api.main] filename=main.py func_name=create_app lineno=264
-2026-03-07T09:50:08.046529Z [info     ] Started server process [54487] [uvicorn.error] filename=server.py func_name=_serve lineno=92
-2026-03-07T09:50:08.046595Z [info     ] Waiting for application startup. [uvicorn.error] filename=on.py func_name=startup lineno=48
-2026-03-07T09:50:08.048415Z [info     ] Running database migrations... [aegra_api.core.migrations] filename=migrations.py func_name=run_migrations lineno=85
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
 INFO  [alembic.runtime.migration] Will assume transactional DDL.
-/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/jwt/api_jwt.py:153: InsecureKeyLengthWarning: The HMAC key is 16 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
-  return self._jws.encode(
-ERROR [aegra_api.api.runs] {'event': '[execute_run_async] streaming error for run_id=5e96c798-83f1-4e88-9bc2-3d4ace2423ab: no running event loop', 'level': 'error', 'logger': 'aegra_api.api.runs', 'lineno': 953, 'filename': 'runs.py', 'func_name': 'execute_run_async', 'timestamp': '2026-03-07T09:51:14.699071Z'}
-ERROR [aegra_api.api.runs] {'exc_info': True, 'event': '[execute_run_async] run failed run_id=5e96c798-83f1-4e88-9bc2-3d4ace2423ab', 'level': 'error', 'logger': 'aegra_api.api.runs', 'lineno': 983, 'filename': 'runs.py', 'func_name': 'execute_run_async', 'timestamp': '2026-03-07T09:51:14.780676Z'}
+ERROR [app.app_logs] {'exception_class': 'AttributeError', 'exc_info': AttributeError("'list' object has no attribute 'items'"), 'stack_info': True, 'event': 'An unhandled exception was caught by middleware; re-raising to allow app handlers to format response', 'level': 'error', 'logger': 'app.app_logs', 'lineno': 47, 'filename': 'logger_middleware.py', 'func_name': '__call__', 'timestamp': '2026-03-08T18:04:02.849058Z'}
 Traceback (most recent call last):
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/aegra_api/api/runs.py", line 911, in execute_run_async
-    async for event_type, event_data in stream_graph_events(
-    ...<36 lines>...
-            raise
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/aegra_api/services/graph_streaming.py", line 255, in stream_graph_events
-    async for event in stream:
-    ...<31 lines>...
-            _normalize_checkpoint_payload(chunk.get("payload"))
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/main.py", line 2997, in astream
-    async for _ in runner.atick(
-    ...<13 lines>...
-            yield o
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/_runner.py", line 410, in atick
-    _panic_or_proceed(
-    ~~~~~~~~~~~~~~~~~^
-        futures.done.union(f for f, t in futures.items() if t is not None),
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        timeout_exc_cls=asyncio.TimeoutError,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        panic=reraise,
-        ^^^^^^^^^^^^^^
-    )
-    ^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/_runner.py", line 520, in _panic_or_proceed
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/aegra_api/middleware/logger_middleware.py", line 43, in __call__
+    await self.app(scope, receive, inner_send)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
     raise exc
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/_retry.py", line 163, in arun_with_retry
-    return await task.proc.ainvoke(task.input, config)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/_internal/_runnable.py", line 711, in ainvoke
-    input = await step.ainvoke(input, config)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/_internal/_runnable.py", line 473, in ainvoke
-    ret = await self.afunc(*args, **kwargs)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/graph/_branch.py", line 189, in _aroute
-    result = await self.path.ainvoke(value, config)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/_internal/_runnable.py", line 464, in ainvoke
-    ret = await asyncio.create_task(coro, context=context)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langchain_core/runnables/config.py", line 636, in run_in_executor
-    return await asyncio.get_running_loop().run_in_executor(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<2 lines>...
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 129, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 115, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 630, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
     )
     ^
-  File "/Users/guzhengzhao/.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py", line 86, in run
-    result = ctx.run(self.task)
-  File "/Users/guzhengzhao/.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py", line 73, in run
-    return fn(*args, **kwargs)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langchain_core/runnables/config.py", line 627, in wrapper
-    return func(*args, **kwargs)
-  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py", line 158, in route_after_agent
-    return _route_after_agent(state, config)
-  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py", line 130, in _route_after_agent
-    trigger_memory_task()
-    ~~~~~~~~~~~~~~~~~~~^^
-  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py", line 119, in trigger_memory_task
-    asyncio.create_task(_bg_task())
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
-  File "/Users/guzhengzhao/.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/asyncio/tasks.py", line 394, in create_task
-    loop = events.get_running_loop()
-RuntimeError: no running event loop
-During task with name 'brain' and id '0b495aba-4c94-0968-dc89-4cc894b63d00'
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 325, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 2502, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 986, in run
+    result = context.run(func, *args)
+  File "/Users/guzhengzhao/project/fit-agent/custom_routes.py", line 258, in coach_os_get_module
+    sections = _plan_sections_from_workspace(user_id)
+  File "/Users/guzhengzhao/project/fit-agent/custom_routes.py", line 80, in _plan_sections_from_workspace
+    for day, detail in list(weekly.items())[:7]:
+                            ^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'items'
+ERROR [app.access_logs] {'http': {'url': '/coach-os/modules/plans', 'status_code': 500, 'method': 'GET', 'version': '1.1'}, 'network': {'client': {'ip': '127.0.0.1', 'port': 55468}}, 'duration': 30040083, 'event': '127.0.0.1:55468 - "GET /coach-os/modules/plans HTTP/1.1" 500', 'level': 'error', 'logger': 'app.access_logs', 'lineno': 82, 'filename': 'logger_middleware.py', 'func_name': '__call__', 'timestamp': '2026-03-08T18:04:02.863809Z'}

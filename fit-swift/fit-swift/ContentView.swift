@@ -5,7 +5,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView()
+            DashboardView(onOpenChat: { selectedTab = 2 })
                 .tabItem {
                     Label("首页", systemImage: "square.grid.2x2")
                 }

@@ -4,6 +4,58 @@
 
 ---
 
+## [2026-03-08] Coach OS 接入后端 ui_state（v1）
+
+- **变更类型**：修改 | 新增
+- **涉及模块**：fit-swift / graph / nodes / docs
+- **变更内容**：
+  - 后端 `ui_state` 协议升级：新增 `data.sections`，按模块输出结构化区块（home metrics/focus、plans overview、training panel）。
+  - `CoachOSMockView` 从本地 mock 切换为真实拉取后端 `waitRun` 结果，并解析 `AIMessage.additional_kwargs.ui_state` 驱动页面切换与数据渲染。
+  - iOS 在发送消息时附带 `ui_context`（当前 module/sub_state），打通“当前页面语义 -> 后端决策 -> 前端切页”的闭环。
+  - 保留现有视觉与交互（Dock tab、悬浮教练、语音切换输入），但渲染数据改为以后端协议为主，fallback 到 cards。
+  - 修复模块路由：`查看计划` 等计划类意图优先映射到 `plans`（不再误入 `training/workout`），并补充计划/训练态的教练回复文案。
+  - 交互体验优化：请求处理中时右下教练头像增加旋转环动效，避免“卡死感”；tab 点击改为用户可先本地切换，再异步同步后端，且预留后端 `permissions.blocked_modules` 阻断能力。
+  - 头像动效收敛：仅在用户发起对话请求等待回复时显示“思考中”旋转环；手动 tab 切换不触发思考态。
+  - 页面切换策略调整：用户点击 tab 立即本地切页，不再依赖 agent 返回；当前页数据采用“页面主动拉取（v1 fallback mock）”，agent 主要负责意图驱动和后端数据修改。
+  - 前端新增“意图预切页”兜底：用户发送“查看计划/训练/评估”等语句时先本地切页，再异步等待后端结果，避免因后端延迟导致页面不切换的体感问题。
+  - 新增独立模块数据接口：`GET /coach-os/modules/{module}`（需登录），返回 `ui_state`；iOS tab 切换改为直接请求该接口获取页面数据，不再依赖 agent 运行链路。
+  - 模块接口接入真实工作区数据：`plans` 读取 `workspace/<user_id>/workout/plans/current.json`，`training` 读取 `workspace/<user_id>/workout/session_state.json`；无数据时自动回退 mock。
+  - `home` 模块接入真实聚合：从计划与 session 计算首页指标（本周计划天数、当前组次完成率）与今日重点文案（按当日计划部位/动作数）。
+  - 修复 plans 接口兼容性：支持多种计划 JSON 结构（`weekly_schedule` 字典、`weekly_schedule` 列表、`schedule + workouts`），避免 tab 点击时报 `list has no attribute items`。
+- **备注**：当前为 v1 页面控制（切页 + 展示），动作执行链路（action 回传与确认）下一步接入。
+
+---
+
+## [2026-03-08] iOS 新版 Coach OS 全屏入口与双层页面 Mock
+
+- **变更类型**：新增 | 修改
+- **涉及模块**：fit-swift / docs
+- **变更内容**：
+  - 新增 `fit-swift/fit-swift/CoachOSMockView.swift`：全屏 Coach OS mock 页面，采用“里层页面系统 + 下方 tab + 外层对话输入与教练头像”双层结构。
+  - 保留原页面不动，仅在 `ChatMainView` 右上角新增入口按钮（sparkles 图标），点击后以 `fullScreenCover` 打开 Coach OS。
+  - Coach OS 内部使用 mock 数据模拟模块切换（首页/计划/训练/评估/其他）和教练驱动跳转，便于先验证交互与布局。
+  - 输入栏左侧改为语音/键盘切换（复用既有按钮与按住说话组件）；教练头像改为右下角悬浮，支持弹出消息气泡并基于用户输入联动当前模块（如“查看进入计划”）。
+  - 调整里层布局：模块 tab 由底部上移到页面顶部，底部只保留输入区；页面整体改为更强的 iOS 玻璃风（渐变背景+毛玻璃卡片+轻描边）。
+  - 顶部导航条改为浮动小关闭按钮（仅保留关闭能力，图标缩小）；主屏可视空间增大。首页/计划/训练内容改为差异化布局（首页指标卡、计划可点进概览、训练专业面板），不再统一列表样式。
+  - 顶部模块切换条改为 iOS Dock 风格（胶囊玻璃底、仅图标、选中圆形高亮与轻微弹簧动效），提升系统感与辨识度。
+- **备注**：本次仅实现 iOS 前端壳与交互原型，暂未接入后端真实协议与动作执行链路。
+
+---
+
+## [2026-03-08] AI 操作系统页面协议 MVP（去 A2UI）
+
+- **变更类型**：新增 | 修改
+- **涉及模块**：graph / nodes / fit-swift / docs
+- **变更内容**：
+  - 新增后端平台无关 UI 协议生成器 `src/fit_agent/ui_protocol.py`，统一输出 `protocol_version/module/sub_state/cards/actions`。
+  - 在 `agent_node` 中为每条 AI 消息注入 `additional_kwargs.ui_state`，让终端按统一协议渲染，不耦合 iOS/Android 视图实现。
+  - iOS 首页改为「AI 操作系统」视图：通过现有 `waitRun` 拉取并解析 `ui_state`，渲染固定结构卡片与动作清单。
+  - iOS 首页新增浮动教练头像入口，可一键切换到私教聊天 Tab（用户可手动操作 + Agent 页面驱动并存）。
+  - `ContentView` 接入首页到聊天页的切换闭环（首页可直接拉起聊天）。
+- **备注**：该版本为 MVP，先打通「后端协议 -> 终端渲染」主链路，后续再接入真正的 action 执行与确认流。
+
+---
+
 ## [2026-03-05] 优化 iOS 流式输出性能与显示稳定性
 
 - **变更类型**：修复 | 重构

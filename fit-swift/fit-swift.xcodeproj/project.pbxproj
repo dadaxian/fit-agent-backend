@@ -27,6 +27,7 @@
 		A1B2C3D4E5F6000000000012 /* ProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000012 /* ProfileStore.swift */; };
 		A1B2C3D4E5F6000000000013 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000013 /* ProfileView.swift */; };
 		A1B2C3D4E5F6000000000014 /* DebugOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000014 /* DebugOverlay.swift */; };
+		A1B2C3D4E5F6000000000015 /* CoachOSMockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000015 /* CoachOSMockView.swift */; };
 		B2B2C3D4E5F6000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3D4E5F6000000000001 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -51,6 +52,7 @@
 		A2B2C3D4E5F6000000000012 /* ProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStore.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000013 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000014 /* DebugOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugOverlay.swift; sourceTree = "<group>"; };
+		A2B2C3D4E5F6000000000015 /* CoachOSMockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachOSMockView.swift; sourceTree = "<group>"; };
 		A3B2C3D4E5F6000000000001 /* fit-swift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "fit-swift.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1B2C3D4E5F6000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -98,6 +100,7 @@
 				A2B2C3D4E5F600000000000F /* CoachAvatar.swift */,
 				A2B2C3D4E5F6000000000010 /* MarkdownText.swift */,
 				A2B2C3D4E5F6000000000014 /* DebugOverlay.swift */,
+				A2B2C3D4E5F6000000000015 /* CoachOSMockView.swift */,
 				B1B2C3D4E5F6000000000001 /* Assets.xcassets */,
 			);
 			path = "fit-swift";
@@ -202,6 +205,7 @@
 				A1B2C3D4E5F6000000000012 /* ProfileStore.swift in Sources */,
 				A1B2C3D4E5F6000000000013 /* ProfileView.swift in Sources */,
 				A1B2C3D4E5F6000000000014 /* DebugOverlay.swift in Sources */,
+				A1B2C3D4E5F6000000000015 /* CoachOSMockView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

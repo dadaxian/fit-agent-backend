@@ -18,23 +18,39 @@ struct RootView: View {
 /// 私教对话主界面（拟人交互为主）
 struct ChatMainView: View {
     let onSwitchToMenu: () -> Void
+    @State private var showCoachOS = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             ChatView()
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 
-            Button {
-                onSwitchToMenu()
-            } label: {
-                Image(systemName: "square.grid.2x2")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                    .padding(10)
-                    .background(.ultraThinMaterial, in: Circle())
+            HStack(spacing: 10) {
+                Button {
+                    showCoachOS = true
+                } label: {
+                    Image(systemName: "sparkles.rectangle.stack.fill")
+                        .font(.title3)
+                        .foregroundStyle(.orange)
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+
+                Button {
+                    onSwitchToMenu()
+                } label: {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
             }
             .padding(.top, 8)
             .padding(.trailing, 16)
+        }
+        .fullScreenCover(isPresented: $showCoachOS) {
+            CoachOSMockView()
         }
     }
 }

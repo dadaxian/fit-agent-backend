@@ -95,6 +95,31 @@ final class APIClient {
         return json
     }
 
+    /// Coach OS：按模块获取页面数据（独立 API，不走 agent 运行）
+    func getCoachOSModule(module: String) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)/coach-os/modules/\(module)") else {
+            throw APIError.invalidURL
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        setAuthHeaders(&req)
+
+        let (data, res) = try await URLSession.shared.data(for: req)
+        guard let http = res as? HTTPURLResponse else {
+            throw APIError.httpError(status: 0)
+        }
+        if http.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw APIError.httpError(status: http.statusCode)
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw APIError.parseError
+        }
+        return json
+    }
+
     /// SSE 事件（对齐 Aegra https://docs.aegra.dev/guides/streaming）
     /// Wire 格式示例：
     ///   event: metadata
