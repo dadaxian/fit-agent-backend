@@ -15,6 +15,8 @@ struct MarkdownText: View {
         Markdown(processedText)
             .markdownTheme(.customTheme)
             .textSelection(.enabled)
+            // 确保 Markdown 渲染层本身不带背景色（只由外层容器决定气泡/卡片背景）
+            .background(Color.clear)
     }
 }
 
@@ -23,6 +25,10 @@ extension Theme {
     static let customTheme = Theme()
         .text {
             ForegroundColor(.primary)
+        }
+        .paragraph { configuration in
+            configuration.label
+                .background(Color.clear)
         }
         .link {
             ForegroundColor(.blue)
@@ -53,5 +59,20 @@ extension Theme {
             Divider()
                 .overlay(Color.gray.opacity(0.3))
                 .padding(.vertical, 8)
+        }
+        .blockquote { configuration in
+            configuration.label
+                .padding(.leading, 10)
+                .overlay(
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.25))
+                        .frame(width: 2),
+                    alignment: .leading
+                )
+                .background(Color.clear)
+        }
+        .codeBlock { configuration in
+            configuration.label
+                .background(Color.clear)
         }
 }

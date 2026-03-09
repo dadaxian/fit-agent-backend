@@ -1,6 +1,7 @@
 """fit-agent 工具：run_command + mark_task_done，参考 biagent agent_meta。"""
 
 import contextvars
+import json
 import os
 import re
 import subprocess
@@ -69,10 +70,26 @@ def ui_command(
     action: str,
     module: Optional[str] = None,
     sub_state: Optional[str] = None,
-    payload: Optional[Dict[str, Any]] = None,
+    payload: Any = None,
 ) -> Dict[str, Any]:
     """返回结构化 UI 控制指令，由前端解析执行。"""
-    p = dict(payload or {})
+    p: Dict[str, Any] = {}
+    if payload is None:
+        p = {}
+    elif isinstance(payload, dict):
+        p = dict(payload)
+    elif isinstance(payload, str):
+        # 兼容模型把 JSON dict 当作字符串传入的情况
+        s = payload.strip()
+        try:
+            obj = json.loads(s) if s else {}
+            if isinstance(obj, dict):
+                p = dict(obj)
+        except Exception:
+            p = {"text": payload}
+    else:
+        # 兜底：尽量保留信息
+        p = {"value": payload}
     if sub_state and "sub_state" not in p:
         p["sub_state"] = sub_state
     return {

@@ -88,7 +88,11 @@ private final class CoachOSMockViewModel: ObservableObject {
     private var module: CoachOSModule { selectedModule }
 
     func sendChatInput() {
-        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        sendText(inputText)
+    }
+
+    func sendText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         inputText = ""
         requestUIState(userText: trimmed, showThinking: true)
@@ -400,8 +404,12 @@ struct CoachOSMockView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthService
     @StateObject private var viewModel = CoachOSMockViewModel()
-    @State private var isVoiceMode = false
-    @State private var isRecording = false
+    @StateObject private var recorder = AudioRecorder()
+    @State private var isDrawerOpen = false
+    @FocusState private var isTextFocused: Bool
+    @State private var voiceDragOffset: CGFloat = 0
+    @State private var userSpin = false
+    @State private var isStartingRecording = false
     @State private var spin = false
     @AppStorage("apiBaseURL") private var apiBaseURL = "http://139.196.181.42:8000"
 
@@ -441,11 +449,10 @@ struct CoachOSMockView: View {
                         .padding(.top, 14)
                         .padding(.bottom, 170)
                     }
-
-                    bottomInputBar
                 }
 
                 floatingCoach
+                floatingUser
                 floatingCloseButton
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -459,6 +466,13 @@ struct CoachOSMockView: View {
             }
             .onChange(of: viewModel.isAgentThinking) { newValue in
                 spin = newValue
+            }
+            .onChange(of: recorder.isRecording) { newValue in
+                // 录音时开启旋转动效，停止即关闭
+                userSpin = newValue
+                if !newValue {
+                    isStartingRecording = false
+                }
             }
         }
     }
@@ -533,40 +547,130 @@ struct CoachOSMockView: View {
         .padding(.bottom, 8)
     }
 
-    private var bottomInputBar: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VoiceModeToggleButton(
-                isVoiceMode: isVoiceMode,
-                isLoading: false,
-                onToggle: { isVoiceMode.toggle() }
-            )
+    private var floatingUser: some View {
+        GeometryReader { geo in
+            // 给左侧教练头像预留空间，避免抽屉遮挡（经验值）
+            let reservedLeft: CGFloat = 140
+            let maxDrawerWidth = max(220, min(320, geo.size.width - reservedLeft))
+            HStack(alignment: .center, spacing: 10) {
+                if isDrawerOpen {
+                    HStack(spacing: 10) {
+                        TextField("输入消息...", text: $viewModel.inputText)
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 22)
+                                    .fill(Color(.systemGray6))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 22)
+                                            .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                            .font(.body)
+                            .focused($isTextFocused)
 
-            if isVoiceMode {
-                HoldToRecordButton(
-                    isRecording: isRecording,
-                    onStart: { isRecording = true },
-                    onStop: {
-                        isRecording = false
-                        viewModel.sendVoiceMockInput()
-                    },
-                    onCancel: { isRecording = false }
-                )
-                .frame(maxWidth: .infinity)
-            } else {
-                ChatTextField(text: $viewModel.inputText)
-                SendButton(enabled: !viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
-                    viewModel.sendChatInput()
+                        SendButton(enabled: !viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                            let text = viewModel.inputText
+                            viewModel.inputText = ""
+                            viewModel.sendText(text)
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                                isDrawerOpen = false
+                            }
+                            isTextFocused = false
+                        }
+                    }
+                    .frame(maxWidth: maxDrawerWidth)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
+
+                userAvatarControl
+            }
+            .padding(.trailing, 16)
+            .padding(.bottom, 56) // 下移：更贴近底部
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isDrawerOpen)
+        }
+    }
+
+    private var userAvatarControl: some View {
+        let cancelThreshold: CGFloat = -80
+        let willCancel = voiceDragOffset < cancelThreshold
+        let isRecordingUI = recorder.isRecording || isStartingRecording
+
+        return ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .overlay(Circle().stroke(Color.orange.opacity(0.25), lineWidth: 1))
+                .frame(width: 56, height: 56)
+
+            Image(systemName: isRecordingUI ? "mic.fill" : "person.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(willCancel ? Color.red : Color.orange)
+
+            if isRecordingUI {
+                Circle()
+                    .trim(from: 0.1, to: 0.82)
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [Color.orange.opacity(0.1), Color.orange, Color.orange.opacity(0.15)]),
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 2.4, lineCap: .round)
+                    )
+                    .frame(width: 68, height: 68)
+                    .rotationEffect(.degrees(userSpin ? 360 : 0))
+                    .animation(.linear(duration: 0.85).repeatForever(autoreverses: false), value: userSpin)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
-        .background(.ultraThinMaterial)
+        .contentShape(Circle())
+        .onTapGesture {
+            guard !recorder.isRecording && !isStartingRecording else { return }
+            let next = !isDrawerOpen
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                isDrawerOpen = next
+            }
+            if next {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    isTextFocused = true
+                }
+            } else {
+                isTextFocused = false
+            }
+        }
+        // 长按（>=0.5s）才进入录音态，避免单击误触发
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
+                .onEnded { _ in
+                    guard !recorder.isRecording else { return }
+                    // 进入录音，收起抽屉
+                    isTextFocused = false
+                    isDrawerOpen = false
+                    isStartingRecording = true
+                    startVoiceRecording()
+                }
+        )
+        // 录音态才响应上滑取消/松开发送
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    guard recorder.isRecording else { return }
+                    voiceDragOffset = value.translation.height
+                }
+                .onEnded { _ in
+                    defer { voiceDragOffset = 0 }
+                    guard recorder.isRecording else { return }
+                    if voiceDragOffset < cancelThreshold {
+                        cancelVoiceRecording()
+                    } else {
+                        stopVoiceRecordingAndSend()
+                    }
+                }
+        )
     }
 
     private var floatingCoach: some View {
-        VStack(alignment: .trailing, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             if !viewModel.coachBubble.isEmpty {
                 MarkdownText(text: viewModel.coachBubble)
                     .padding(.horizontal, 12)
@@ -602,9 +706,47 @@ struct CoachOSMockView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.trailing, 16)
-        .padding(.bottom, 84)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(.leading, 16)
+        .padding(.bottom, 56) // 下移：更贴近底部
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+    }
+
+    private func startVoiceRecording() {
+        Task {
+            let granted = await recorder.requestPermission()
+            guard granted else {
+                await MainActor.run { isStartingRecording = false }
+                return
+            }
+            do {
+                try recorder.startRecording()
+            } catch {
+                // ignore UI error for now
+                await MainActor.run { isStartingRecording = false }
+            }
+        }
+    }
+
+    private func stopVoiceRecordingAndSend() {
+        guard let data = recorder.stopRecording() else { return }
+        let prompt: String? = nil
+        Task {
+            do {
+                let service = VoiceService(baseURL: apiBaseURL, authToken: auth.token)
+                let text = try await service.speechToText(audioData: data, contentType: "audio/x-caf", prompt: prompt)
+                await MainActor.run {
+                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        viewModel.sendText(text)
+                    }
+                }
+            } catch {
+                // ignore UI error for now
+            }
+        }
+    }
+
+    private func cancelVoiceRecording() {
+        _ = recorder.stopRecording()
     }
 
     private var floatingCloseButton: some View {
