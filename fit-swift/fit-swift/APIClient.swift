@@ -96,8 +96,12 @@ final class APIClient {
     }
 
     /// Coach OS：按模块获取页面数据（独立 API，不走 agent 运行）
-    func getCoachOSModule(module: String) async throws -> [String: Any] {
-        guard let url = URL(string: "\(baseURL)/coach-os/modules/\(module)") else {
+    func getCoachOSModule(module: String, subState: String? = nil) async throws -> [String: Any] {
+        var comps = URLComponents(string: "\(baseURL)/coach-os/modules/\(module)")
+        if let subState, !subState.isEmpty, subState != "overview" {
+            comps?.queryItems = [URLQueryItem(name: "sub_state", value: subState)]
+        }
+        guard let url = comps?.url else {
             throw APIError.invalidURL
         }
         var req = URLRequest(url: url)
@@ -118,6 +122,31 @@ final class APIClient {
             throw APIError.parseError
         }
         return json
+    }
+
+    /// Coach OS：读取当前用户黑板 markdown
+    func getCoachOSBlackboard() async throws -> String {
+        guard let url = URL(string: "\(baseURL)/coach-os/blackboard") else {
+            throw APIError.invalidURL
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        setAuthHeaders(&req)
+
+        let (data, res) = try await URLSession.shared.data(for: req)
+        guard let http = res as? HTTPURLResponse else {
+            throw APIError.httpError(status: 0)
+        }
+        if http.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw APIError.httpError(status: http.statusCode)
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw APIError.parseError
+        }
+        return (json["markdown"] as? String) ?? ""
     }
 
     /// SSE 事件（对齐 Aegra https://docs.aegra.dev/guides/streaming）

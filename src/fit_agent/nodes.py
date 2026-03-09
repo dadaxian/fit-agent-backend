@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import json
 from typing import Any, Dict, List
 from datetime import datetime
 
@@ -23,7 +24,12 @@ MAX_ITERATIONS = 50
 REMINDER_AFTER_CONSECUTIVE = 1  # 首次无 tool_call 即提醒
 MAX_CONSECUTIVE_NO_TOOL_CALLS = 2  # 最多重试 1 次后强制结束
 
-REMINDER_NO_CHOICE = """【系统提醒】你上一条消息只输出了文字，没有调用工具。你只能使用两个工具：run_command（执行命令）、mark_task_done（结束任务）。请在本轮必须二选一：继续则调用 run_command，结束则调用 mark_task_done。禁止只输出文字，禁止调用其他工具。"""
+REMINDER_NO_CHOICE = """【系统提醒】你上一条消息没有调用工具。你必须在本轮调用工具之一：run_command / ui_command / mark_task_done。
+
+建议：
+- 需要切页：调用 ui_command(action="navigate", module="...", payload={"sub_state":"..."})。
+- 需要输出任何无法用 1–3 句清晰呈现的内容（长列表/长解释/多日期记录/表格/计划明细等）：不要直接把长内容写进对话；先用 run_command 写入 `workspace/<user_id>/coach_os/blackboard.md`，再用 ui_command 跳转到 workspace/blackboard，并在对话里只输出 1 句总结。
+"""
 
 
 def _extract_latest_human_text(messages: List[Any]) -> str:
@@ -205,11 +211,16 @@ async def _execute_single_tool(
             result = await tool_instance.ainvoke(args, config=config or {})
         else:
             result = tool_instance.invoke(args, config=config or {})
+        extra = {"timestamp": now_with_tz().isoformat()}
+        content = str(result)
+        if name == "ui_command" and isinstance(result, dict):
+            extra["ui_command"] = result
+            content = json.dumps(result, ensure_ascii=False)
         return ToolMessage(
-            content=str(result),
+            content=content,
             tool_call_id=call_id,
             name=name,
-            additional_kwargs={"timestamp": now_with_tz().isoformat()},
+            additional_kwargs=extra,
         )
     except Exception as e:
         logger.exception(f"工具调用失败 {name}")

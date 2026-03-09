@@ -154,6 +154,9 @@ def build_memory_context(user_id: str) -> str:
 
 def apply_forgetting_to_messages(user_id: str, messages: list[Any]) -> list[Any]:
     if not messages: return messages
+    # 临时方案：仅保留最近 20 条，旧的遗忘逻辑先保留但暂不启用
+    if len(messages) > 20:
+        return messages[-20:]
     cutoff = max(len(messages) - MEMORY_WINDOW_SIZE, 0)
     if cutoff <= 0: return messages
 

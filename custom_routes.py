@@ -59,6 +59,16 @@ def _workspace_dir(user_id: str) -> Path:
     return WORKSPACE_BASE / _sanitize_user_id(user_id)
 
 
+def _coach_os_dir(user_id: str) -> Path:
+    d = _workspace_dir(user_id) / "coach_os"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _blackboard_path(user_id: str) -> Path:
+    return _coach_os_dir(user_id) / "blackboard.md"
+
+
 def _load_json(path: Path) -> dict | list | None:
     if not path.exists():
         return None
@@ -205,6 +215,29 @@ def _weekday_cn() -> str:
     return mapping[datetime.now().weekday()]
 
 
+def _plans_today_sections_from_workspace(user_id: str) -> list[dict]:
+    plan_path = _workspace_dir(user_id) / "workout" / "plans" / "current.json"
+    plan = _load_json(plan_path)
+    if not isinstance(plan, dict):
+        return []
+    plan_days = _extract_plan_days(plan)
+    today = _weekday_cn()
+    today_plan = next((p for p in plan_days if p.get("day") == today), None) or {}
+    today_part = today_plan.get("focus", "今日计划待确认")
+    today_actions_count = int(today_plan.get("exercise_count", 0) or 0)
+    return [
+        {
+            "id": "today_overview",
+            "type": "today_overview",
+            "title": "今日训练计划",
+            "items": [
+                {"id": "today", "title": f"{today} · {today_part}", "subtitle": f"{today_actions_count} 个动作"},
+                {"id": "cta", "title": "建议", "subtitle": "准备好后可以直接开始训练"},
+            ],
+        }
+    ]
+
+
 def _home_sections_from_workspace(user_id: str) -> list[dict]:
     ws = _workspace_dir(user_id)
     plan = _load_json(ws / "workout" / "plans" / "current.json") or {}
@@ -298,7 +331,7 @@ def threads_get_or_create(request: Request):
 
 # --- Coach OS: 独立页面数据接口（不依赖 agent 流） ---
 @coach_os_router.get("/modules/{module}")
-def coach_os_get_module(module: str, request: Request):
+def coach_os_get_module(module: str, request: Request, sub_state: str | None = None):
     """
     获取 Coach OS 某个模块的数据快照。
     需要登录（Bearer JWT）。
@@ -306,16 +339,24 @@ def coach_os_get_module(module: str, request: Request):
     user_id = _get_user_id_from_request(request)
     normalized = normalize_module(module)
     ui_state = build_ui_state_for_module(normalized, last_user_text=f"打开{normalized}模块")
+    if sub_state:
+        ui_state["sub_state"] = sub_state
     if normalized == "home":
         sections = _home_sections_from_workspace(user_id)
         if sections:
             ui_state["data"] = {"sections": sections}
             ui_state["coach_message"] = "已同步你的计划与训练进度，首页数据已更新。"
     elif normalized == "plans":
-        sections = _plan_sections_from_workspace(user_id)
-        if sections:
-            ui_state["data"] = {"sections": sections}
-            ui_state["coach_message"] = "已读取你的训练计划数据，页面已更新。"
+        if (sub_state or "").lower() in {"today", "plan_today"}:
+            sections = _plans_today_sections_from_workspace(user_id)
+            if sections:
+                ui_state["data"] = {"sections": sections}
+                ui_state["coach_message"] = "我已为你打开今日训练计划。"
+        else:
+            sections = _plan_sections_from_workspace(user_id)
+            if sections:
+                ui_state["data"] = {"sections": sections}
+                ui_state["coach_message"] = "已读取你的训练计划数据，页面已更新。"
     elif normalized == "training":
         sections = _training_sections_from_workspace(user_id)
         if sections:
@@ -324,6 +365,19 @@ def coach_os_get_module(module: str, request: Request):
     # 预留权限位：后续可由后端基于状态控制模块阻断
     ui_state["permissions"] = {"blocked_modules": []}
     return {"user_id": user_id, "ui_state": ui_state}
+
+
+@coach_os_router.get("/blackboard")
+def coach_os_get_blackboard(request: Request):
+    """读取当前用户黑板内容（markdown）。需要登录（Bearer JWT）。"""
+    user_id = _get_user_id_from_request(request)
+    path = _blackboard_path(user_id)
+    if not path.exists():
+        return {"user_id": user_id, "markdown": ""}
+    try:
+        return {"user_id": user_id, "markdown": path.read_text(encoding="utf-8")}
+    except Exception:
+        return {"user_id": user_id, "markdown": ""}
 
 
 # --- Auth ---

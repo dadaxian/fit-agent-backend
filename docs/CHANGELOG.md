@@ -4,6 +4,43 @@
 
 ---
 
+## [2026-03-08] Coach OS 子页与黑板兜底（prompt + API + iOS）
+
+- **变更类型**：修改 | 新增
+- **涉及模块**：fit-agent / fit-swift / docs
+- **变更内容**：
+  - 系统 prompt 增强：气泡短回复预算（1–3 句）、LLM 主动跳转协同、长内容落黑板文件策略、`sub_state` 约定（plans.today / training.session / workspace.blackboard）。
+  - `ui_command` 增强：支持 `sub_state`（同时兼容 `payload.sub_state`）。
+  - 后端新增黑板读取接口：`GET /coach-os/blackboard`，返回当前用户黑板 markdown。
+  - 模块接口支持 `sub_state`：`GET /coach-os/modules/{module}?sub_state=...`，新增 `plans.today` 数据区块。
+  - iOS 补齐子页渲染：Plans Today、Workspace Blackboard（使用 `MarkdownUI` 渲染），并按 `ui_command` 的 `module+sub_state` 执行切页与数据拉取。
+
+---
+
+## [2026-03-08] Coach OS 工具流交互修正
+
+- **变更类型**：修改
+- **涉及模块**：fit-swift / fit-agent / docs
+- **变更内容**：
+  - iOS 对话不再依赖 `ui_state` 固定文案，改为显示最新 AI 文本。
+  - 移除前端“意图预切页”逻辑，仅接受 `ui_command` 导航指令。
+  - 修正思考中动效触发：基于 `isAgentThinking` 控制旋转环。
+  - prompt 强制在调用 `ui_command` 时仍输出一句回复。
+
+---
+
+## [2026-03-08] LLM 主动 UI 命令（tool 化）
+
+- **变更类型**：修改 | 新增
+- **涉及模块**：fit-agent / fit-swift / docs
+- **变更内容**：
+  - 新增 `ui_command` 工具：允许 LLM 主动输出结构化页面控制指令（如 navigate/show_message）。
+  - `tools_node` 将 `ui_command` 结果写入 `ToolMessage.additional_kwargs.ui_command`，同时序列化为 JSON 便于解析。
+  - iOS 解析 `tool` 消息并执行 UI 命令：支持切页与气泡消息更新，保持对话流式输出不受影响。
+  - 更新系统 prompt，允许 LLM 使用 `ui_command` 控制页面。
+
+---
+
 ## [2026-03-08] Coach OS 接入后端 ui_state（v1）
 
 - **变更类型**：修改 | 新增

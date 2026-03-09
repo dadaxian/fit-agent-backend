@@ -5,7 +5,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from langchain_core.tools import BaseTool, tool
 
@@ -56,6 +56,34 @@ def mark_task_done(reason: str = "") -> str:
 
 
 @tool(
+    description="""用于控制前端页面（Coach OS）。当需要切页或触发前端交互时调用。
+
+参数：
+- action: 动作类型，如 navigate / show_message
+- module: 目标模块（home/plans/training/assessment/workspace），仅 action=navigate 时需要
+- sub_state: 可选子页（today/session/blackboard 等）。也可放在 payload.sub_state（推荐）
+- payload: 可选的附加信息（如提示文本）
+"""
+)
+def ui_command(
+    action: str,
+    module: Optional[str] = None,
+    sub_state: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """返回结构化 UI 控制指令，由前端解析执行。"""
+    p = dict(payload or {})
+    if sub_state and "sub_state" not in p:
+        p["sub_state"] = sub_state
+    return {
+        "type": action,
+        "module": module,
+        "sub_state": sub_state,
+        "payload": p,
+    }
+
+
+@tool(
     description="""在**项目根目录**中执行一条 shell 命令，并返回该命令的标准输出或错误信息。
 
 **本质**：你在与项目终端交互——传入一条命令字符串，机器在项目根目录下执行后把结果文本返回给你。你可以据此继续推理或再发下一条命令。
@@ -92,7 +120,7 @@ def run_command(cmd: str) -> str:
 
 def get_tools() -> List[BaseTool]:
     """返回 fit-agent 可用工具列表。"""
-    return [run_command, mark_task_done]
+    return [run_command, mark_task_done, ui_command]
 
 
 def get_tool_by_name(tool_name: str, tools: List[BaseTool]) -> BaseTool:
@@ -101,5 +129,5 @@ def get_tool_by_name(tool_name: str, tools: List[BaseTool]) -> BaseTool:
         if t.name == tool_name:
             return t
     raise ValueError(
-        f"工具 '{tool_name}' 不存在。你只能使用 run_command 和 mark_task_done，请用这两个工具之一重新调用。"
+        f"工具 '{tool_name}' 不存在。你只能使用 run_command、ui_command、mark_task_done。"
     )

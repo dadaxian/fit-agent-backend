@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownUI
 
 private enum CoachOSModule: String, CaseIterable, Identifiable {
     case home
@@ -60,6 +61,8 @@ private final class CoachOSMockViewModel: ObservableObject {
     @Published var isAgentThinking = false
     @Published var error: String?
     @Published var uiState: CoachOSUIState?
+    @Published var currentSubState: String = "overview"
+    @Published var blackboardMarkdown: String = ""
     @Published var blockedModules: Set<CoachOSModule> = []
 
     private var apiClient: APIClient?
@@ -70,7 +73,7 @@ private final class CoachOSMockViewModel: ObservableObject {
     }
 
     func loadInitialState() {
-        requestModuleData(for: .home)
+        requestModuleData(for: .home, subState: "overview")
     }
 
     func quickActionTitle() -> String {
@@ -102,12 +105,18 @@ private final class CoachOSMockViewModel: ObservableObject {
             return
         }
         selectedModule = module
+        currentSubState = "overview"
         // 用户手动切换时立即切页，不再等待 agent
         requestModuleData(for: module)
     }
 
     func openPlanItem(title: String) {
-        requestUIState(userText: "查看进入\(title)", showThinking: true)
+        // 用户点击页面元素时走“传统逻辑”：本地直接跳转，不依赖 agent 决策
+        navigateLocal(to: .plans, subState: "today")
+    }
+
+    func startTraining() {
+        requestUIState(userText: "开始训练", showThinking: true)
     }
 
     func pingCoach() {
@@ -119,11 +128,22 @@ private final class CoachOSMockViewModel: ObservableObject {
         coachBubble = text
     }
 
+    func navigateLocal(to module: CoachOSModule, subState: String = "overview") {
+        guard !blockedModules.contains(module) else {
+            updateCoachReply("当前阶段暂不能进入\(module.title)模块。")
+            return
+        }
+        selectedModule = module
+        currentSubState = subState
+        if module == .workspace, subState == "blackboard" {
+            requestBlackboard()
+        } else {
+            requestModuleData(for: module, subState: subState)
+        }
+    }
+
     private func requestUIState(userText: String, showThinking: Bool) {
         guard !isLoading, let client = apiClient else { return }
-        if let inferred = inferModule(from: userText), !blockedModules.contains(inferred) {
-            selectedModule = inferred
-        }
         isLoading = true
         isAgentThinking = showThinking
         error = nil
@@ -137,13 +157,15 @@ private final class CoachOSMockViewModel: ObservableObject {
                 let message = buildHumanMessage(text: userText)
                 let output = try await client.waitRun(threadId: tid, messages: [message])
                 let rawMessages = extractMessages(from: output)
-                guard let parsed = parseLatestUIState(from: rawMessages) else {
-                    self.error = "未解析到页面状态"
-                    return
+                let commands = extractUICommands(from: rawMessages)
+                for cmd in commands {
+                    applyUICommand(cmd)
                 }
-                self.uiState = parsed
-                self.selectedModule = parsed.module
-                self.updateCoachReply(parsed.coachMessage)
+                if let aiText = extractLatestAIText(from: rawMessages) {
+                    self.updateCoachReply(aiText)
+                } else if commands.isEmpty {
+                    self.error = "未解析到回复或页面指令"
+                }
             } catch {
                 self.error = error.localizedDescription
                 self.updateCoachReply("请求失败，请稍后重试。")
@@ -155,14 +177,41 @@ private final class CoachOSMockViewModel: ObservableObject {
         guard let client = apiClient else { return }
         Task { @MainActor in
             do {
-                let payload = try await client.getCoachOSModule(module: module.key)
+                let payload = try await client.getCoachOSModule(module: module.key, subState: currentSubState)
                 guard let parsed = parseUIStateFromPayload(payload) else { return }
                 self.uiState = parsed
                 self.selectedModule = parsed.module
-                self.coachLine = parsed.coachMessage
+                self.currentSubState = parsed.subState
             } catch {
                 // 模块数据接口失败时不打断用户切页体验，仅提示
                 self.error = "模块数据加载失败：\(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func requestModuleData(for module: CoachOSModule, subState: String) {
+        guard let client = apiClient else { return }
+        currentSubState = subState
+        Task { @MainActor in
+            do {
+                let payload = try await client.getCoachOSModule(module: module.key, subState: subState)
+                guard let parsed = parseUIStateFromPayload(payload) else { return }
+                self.uiState = parsed
+                self.selectedModule = parsed.module
+                self.currentSubState = parsed.subState
+            } catch {
+                self.error = "模块数据加载失败：\(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func requestBlackboard() {
+        guard let client = apiClient else { return }
+        Task { @MainActor in
+            do {
+                self.blackboardMarkdown = try await client.getCoachOSBlackboard()
+            } catch {
+                self.error = "黑板加载失败：\(error.localizedDescription)"
             }
         }
     }
@@ -220,6 +269,80 @@ private final class CoachOSMockViewModel: ObservableObject {
         return nil
     }
 
+    private func extractLatestAIText(from messages: [[String: Any]]) -> String? {
+        for msg in messages.reversed() {
+            guard (msg["type"] as? String) == "ai" else { continue }
+            if let content = msg["content"] as? String {
+                let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty { return text }
+            }
+            if let blocks = msg["content"] as? [[String: Any]] {
+                let parts = blocks.compactMap { block -> String? in
+                    guard (block["type"] as? String) == "text" else { return nil }
+                    let text = (block["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    return text.isEmpty ? nil : text
+                }
+                if !parts.isEmpty { return parts.joined(separator: " ") }
+            }
+        }
+        return nil
+    }
+
+    private func extractUICommands(from messages: [[String: Any]]) -> [[String: Any]] {
+        var commands: [[String: Any]] = []
+        let lastHumanIndex = messages.lastIndex { ($0["type"] as? String) == "human" } ?? -1
+        for (idx, msg) in messages.enumerated() where idx > lastHumanIndex {
+            guard (msg["type"] as? String) == "tool" else { continue }
+            guard (msg["name"] as? String) == "ui_command" else { continue }
+            if let kwargs = msg["additional_kwargs"] as? [String: Any],
+               let cmd = kwargs["ui_command"] as? [String: Any] {
+                commands.append(cmd)
+                continue
+            }
+            if let content = msg["content"] as? String,
+               let data = content.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let wrapped = json["output"] as? [String: Any] {
+                    commands.append(wrapped)
+                } else {
+                    commands.append(json)
+                }
+            }
+        }
+        return commands
+    }
+
+    private func applyUICommand(_ command: [String: Any]) {
+        let type = (command["type"] as? String) ?? ""
+        let moduleString = command["module"] as? String
+        let payload = command["payload"] as? [String: Any] ?? [:]
+        let subState = (command["sub_state"] as? String) ?? (payload["sub_state"] as? String) ?? "overview"
+        switch type {
+        case "navigate":
+            guard let moduleString else { return }
+            let target = CoachOSModule.fromServerModule(moduleString)
+            if blockedModules.contains(target) {
+                updateCoachReply("当前阶段暂不能进入\(target.title)模块。")
+                return
+            }
+            selectedModule = target
+            currentSubState = subState
+            if target == .workspace, subState == "blackboard" {
+                requestBlackboard()
+            } else {
+                requestModuleData(for: target, subState: subState)
+            }
+        case "show_message":
+            if let text = payload["text"] as? String {
+                updateCoachReply(text)
+            } else if let text = payload["message"] as? String {
+                updateCoachReply(text)
+            }
+        default:
+            break
+        }
+    }
+
     private func parseUIStateFromPayload(_ payload: [String: Any]) -> CoachOSUIState? {
         if let ui = payload["ui_state"] as? [String: Any] {
             return mapToState(ui)
@@ -271,21 +394,6 @@ private final class CoachOSMockViewModel: ObservableObject {
         )
     }
 
-    private func inferModule(from userText: String) -> CoachOSModule? {
-        if userText.contains("计划") || userText.contains("饮食") || userText.contains("热量") || userText.contains("安排") {
-            return .plans
-        }
-        if userText.contains("训练") || userText.contains("组") || userText.contains("次数") {
-            return .training
-        }
-        if userText.contains("评估") || userText.contains("视频") || userText.contains("照片") || userText.contains("体态") {
-            return .assessment
-        }
-        if userText.contains("笔记") || userText.contains("黑板") || userText.contains("markdown") {
-            return .workspace
-        }
-        return nil
-    }
 }
 
 struct CoachOSMockView: View {
@@ -315,16 +423,6 @@ struct CoachOSMockView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(.thinMaterial, in: Capsule())
-
-                            Text(viewModel.coachLine)
-                                .font(.subheadline)
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
-                                )
                             moduleContent
 
                             Button(viewModel.quickActionTitle()) {
@@ -358,7 +456,9 @@ struct CoachOSMockView: View {
                 if viewModel.uiState == nil, auth.isLoggedIn {
                     viewModel.loadInitialState()
                 }
-                spin = true
+            }
+            .onChange(of: viewModel.isAgentThinking) { newValue in
+                spin = newValue
             }
         }
     }
@@ -468,12 +568,15 @@ struct CoachOSMockView: View {
     private var floatingCoach: some View {
         VStack(alignment: .trailing, spacing: 8) {
             if !viewModel.coachBubble.isEmpty {
-                Text(viewModel.coachBubble)
-                    .font(.subheadline)
+                MarkdownText(text: viewModel.coachBubble)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .frame(maxWidth: 240, alignment: .leading)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
+                    )
+                    .frame(maxWidth: 260, alignment: .leading)
             }
             Button {
                 viewModel.pingCoach()
@@ -527,10 +630,20 @@ struct CoachOSMockView: View {
         case .home:
             homeContentFromSections
         case .plans:
-            plansContentFromSections
+            if viewModel.currentSubState == "today" {
+                plansTodayContentFromSections
+            } else {
+                plansContentFromSections
+            }
         case .training:
             trainingContentFromSections
-        case .assessment, .workspace:
+        case .workspace:
+            if viewModel.currentSubState == "blackboard" {
+                blackboardContent
+            } else {
+                defaultListContent
+            }
+        case .assessment:
             defaultListContent
         }
     }
@@ -588,6 +701,38 @@ struct CoachOSMockView: View {
                         subtitle: item["subtitle"] as? String ?? ""
                     ) {
                         viewModel.openPlanItem(title: item["title"] as? String ?? "计划")
+                    }
+                }
+            }
+        }
+    }
+
+    private var plansTodayContentFromSections: some View {
+        let todaySection = section(type: "today_overview")
+        let items = todaySection?["items"] as? [[String: Any]] ?? []
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(todaySection?["title"] as? String ?? "今日训练计划")
+                    .font(.headline)
+                Spacer()
+                Text("Today")
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.thinMaterial, in: Capsule())
+            }
+
+            if items.isEmpty {
+                defaultListContent
+            } else {
+                ForEach(items.indices, id: \.self) { idx in
+                    let item = items[idx]
+                    planRow(
+                        title: item["title"] as? String ?? "今日计划",
+                        subtitle: item["subtitle"] as? String ?? ""
+                    ) {
+                        // 用户点击页面元素时走“传统逻辑”：直接进入训练进行中页
+                        viewModel.navigateLocal(to: .training, subState: "session")
                     }
                 }
             }
@@ -655,6 +800,39 @@ struct CoachOSMockView: View {
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
                 )
+            }
+        }
+    }
+
+    private var blackboardContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("黑板")
+                    .font(.headline)
+                Spacer()
+                Text("Markdown")
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.thinMaterial, in: Capsule())
+            }
+
+            if viewModel.blackboardMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("黑板为空。你可以让教练把长内容整理到黑板。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            } else {
+                MarkdownText(text: viewModel.blackboardMarkdown)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+                    )
             }
         }
     }
