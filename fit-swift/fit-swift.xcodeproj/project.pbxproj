@@ -9,23 +9,17 @@
 /* Begin PBXBuildFile section */
 		4FAC81B82F5C247E008D03D0 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 4FAC81B72F5C247E008D03D0 /* MarkdownUI */; };
 		A1B2C3D4E5F6000000000001 /* fit-swiftApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000001 /* fit-swiftApp.swift */; };
-		A1B2C3D4E5F6000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000002 /* ContentView.swift */; };
 		A1B2C3D4E5F6000000000003 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000003 /* ChatView.swift */; };
 		A1B2C3D4E5F6000000000004 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000004 /* ChatViewModel.swift */; };
 		A1B2C3D4E5F6000000000005 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000005 /* APIClient.swift */; };
 		A1B2C3D4E5F6000000000006 /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000006 /* VoiceService.swift */; };
 		A1B2C3D4E5F6000000000007 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000007 /* AudioRecorder.swift */; };
-		A1B2C3D4E5F6000000000008 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000008 /* DashboardView.swift */; };
-		A1B2C3D4E5F6000000000009 /* WorkoutPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000009 /* WorkoutPlaceholderView.swift */; };
-		A1B2C3D4E5F600000000000A /* AssessmentPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F600000000000A /* AssessmentPlaceholderView.swift */; };
-		A1B2C3D4E5F600000000000B /* NutritionPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F600000000000B /* NutritionPlaceholderView.swift */; };
 		A1B2C3D4E5F600000000000C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F600000000000C /* SettingsView.swift */; };
 		A1B2C3D4E5F600000000000D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F600000000000E /* RootView.swift */; };
 		A1B2C3D4E5F600000000000E /* CoachAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F600000000000F /* CoachAvatar.swift */; };
 		A1B2C3D4E5F6000000000010 /* MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000010 /* MarkdownText.swift */; };
 		A1B2C3D4E5F6000000000011 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000011 /* AuthService.swift */; };
 		A1B2C3D4E5F6000000000012 /* ProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000012 /* ProfileStore.swift */; };
-		A1B2C3D4E5F6000000000013 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000013 /* ProfileView.swift */; };
 		A1B2C3D4E5F6000000000014 /* DebugOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000014 /* DebugOverlay.swift */; };
 		A1B2C3D4E5F6000000000015 /* CoachOSMockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C3D4E5F6000000000015 /* CoachOSMockView.swift */; };
 		B2B2C3D4E5F6000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3D4E5F6000000000001 /* Assets.xcassets */; };
@@ -33,16 +27,11 @@
 
 /* Begin PBXFileReference section */
 		A2B2C3D4E5F6000000000001 /* fit-swiftApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "fit-swiftApp.swift"; sourceTree = "<group>"; };
-		A2B2C3D4E5F6000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000003 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000004 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000005 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000006 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000007 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
-		A2B2C3D4E5F6000000000008 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
-		A2B2C3D4E5F6000000000009 /* WorkoutPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutPlaceholderView.swift; sourceTree = "<group>"; };
-		A2B2C3D4E5F600000000000A /* AssessmentPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssessmentPlaceholderView.swift; sourceTree = "<group>"; };
-		A2B2C3D4E5F600000000000B /* NutritionPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionPlaceholderView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F600000000000C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F600000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2B2C3D4E5F600000000000E /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -50,7 +39,6 @@
 		A2B2C3D4E5F6000000000010 /* MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownText.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000011 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000012 /* ProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStore.swift; sourceTree = "<group>"; };
-		A2B2C3D4E5F6000000000013 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000014 /* DebugOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugOverlay.swift; sourceTree = "<group>"; };
 		A2B2C3D4E5F6000000000015 /* CoachOSMockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachOSMockView.swift; sourceTree = "<group>"; };
 		A3B2C3D4E5F6000000000001 /* fit-swift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "fit-swift.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -81,19 +69,13 @@
 			isa = PBXGroup;
 			children = (
 				A2B2C3D4E5F6000000000001 /* fit-swiftApp.swift */,
-				A2B2C3D4E5F6000000000002 /* ContentView.swift */,
 				A2B2C3D4E5F6000000000003 /* ChatView.swift */,
 				A2B2C3D4E5F6000000000004 /* ChatViewModel.swift */,
 				A2B2C3D4E5F6000000000005 /* APIClient.swift */,
 				A2B2C3D4E5F6000000000011 /* AuthService.swift */,
 				A2B2C3D4E5F6000000000012 /* ProfileStore.swift */,
-				A2B2C3D4E5F6000000000013 /* ProfileView.swift */,
 				A2B2C3D4E5F6000000000006 /* VoiceService.swift */,
 				A2B2C3D4E5F6000000000007 /* AudioRecorder.swift */,
-				A2B2C3D4E5F6000000000008 /* DashboardView.swift */,
-				A2B2C3D4E5F6000000000009 /* WorkoutPlaceholderView.swift */,
-				A2B2C3D4E5F600000000000A /* AssessmentPlaceholderView.swift */,
-				A2B2C3D4E5F600000000000B /* NutritionPlaceholderView.swift */,
 				A2B2C3D4E5F600000000000C /* SettingsView.swift */,
 				A2B2C3D4E5F600000000000D /* Info.plist */,
 				A2B2C3D4E5F600000000000E /* RootView.swift */,
@@ -187,23 +169,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1B2C3D4E5F6000000000001 /* fit-swiftApp.swift in Sources */,
-				A1B2C3D4E5F6000000000002 /* ContentView.swift in Sources */,
 				A1B2C3D4E5F6000000000003 /* ChatView.swift in Sources */,
 				A1B2C3D4E5F6000000000004 /* ChatViewModel.swift in Sources */,
 				A1B2C3D4E5F6000000000005 /* APIClient.swift in Sources */,
 				A1B2C3D4E5F6000000000011 /* AuthService.swift in Sources */,
 				A1B2C3D4E5F6000000000006 /* VoiceService.swift in Sources */,
 				A1B2C3D4E5F6000000000007 /* AudioRecorder.swift in Sources */,
-				A1B2C3D4E5F6000000000008 /* DashboardView.swift in Sources */,
-				A1B2C3D4E5F6000000000009 /* WorkoutPlaceholderView.swift in Sources */,
-				A1B2C3D4E5F600000000000A /* AssessmentPlaceholderView.swift in Sources */,
-				A1B2C3D4E5F600000000000B /* NutritionPlaceholderView.swift in Sources */,
 				A1B2C3D4E5F600000000000C /* SettingsView.swift in Sources */,
 				A1B2C3D4E5F600000000000D /* RootView.swift in Sources */,
 				A1B2C3D4E5F600000000000E /* CoachAvatar.swift in Sources */,
 				A1B2C3D4E5F6000000000010 /* MarkdownText.swift in Sources */,
 				A1B2C3D4E5F6000000000012 /* ProfileStore.swift in Sources */,
-				A1B2C3D4E5F6000000000013 /* ProfileView.swift in Sources */,
 				A1B2C3D4E5F6000000000014 /* DebugOverlay.swift in Sources */,
 				A1B2C3D4E5F6000000000015 /* CoachOSMockView.swift in Sources */,
 			);

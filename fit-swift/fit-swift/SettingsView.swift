@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthService
-    @EnvironmentObject private var profileStore: ProfileStore
+    var showsCloseButton: Bool = false
     @AppStorage("apiBaseURL") private var apiBaseURL = "http://139.196.181.42:8000"
 
     @State private var authMode: AuthMode = .login
@@ -78,11 +79,8 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        NavigationLink {
-                            ProfileView(profileStore: profileStore)
-                        } label: {
-                            Label("个人信息", systemImage: "person.text.rectangle")
-                        }
+                        Label("个人信息", systemImage: "person.text.rectangle")
+                            .foregroundStyle(.secondary)
                     } header: {
                         Text("账号")
                     }
@@ -99,6 +97,13 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("我的")
+            .toolbar {
+                if showsCloseButton {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("关闭") { dismiss() }
+                    }
+                }
+            }
         }
     }
 

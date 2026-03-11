@@ -8,7 +8,9 @@ enum VoiceInputState: String {
 }
 
 struct ChatView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthService
+    var showsCloseButton: Bool = false
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var recorder = AudioRecorder()
     @State private var inputText = ""
@@ -35,6 +37,11 @@ struct ChatView: View {
                     if auth.isLoggedIn {
                         ToolbarItem(placement: .topBarLeading) {
                             settingsBar
+                        }
+                    }
+                    if showsCloseButton {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("关闭") { dismiss() }
                         }
                     }
                 }

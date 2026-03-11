@@ -24,6 +24,20 @@ def _module_from_query(user_text: str) -> str:
     return "home"
 
 
+
+
+def _sub_state_from_query(module: str, user_text: str) -> str:
+    if module == "plans":
+        if _contains_any(user_text, ["饮食计划", "今日饮食", "吃什么", "营养计划", "饮食"]):
+            return "nutrition_detail"
+        if _contains_any(user_text, ["今日训练计划", "今天训练", "训练计划", "练什么"]):
+            return "training_detail"
+    if module == "training" and _contains_any(user_text, ["开始训练", "带我练", "开始今天训练"]):
+        return "session"
+    if module == "workspace" and _contains_any(user_text, ["黑板", "markdown", "长内容"]):
+        return "blackboard"
+    return "overview"
+
 def normalize_module(module: str) -> str:
     """Normalize module aliases to coach-ui canonical names."""
     m = (module or "").strip().lower()
@@ -156,10 +170,11 @@ def _default_actions(module: str) -> List[Dict[str, Any]]:
 def build_ui_state(last_user_text: str) -> Dict[str, Any]:
     """Build a stable, cross-platform UI state protocol."""
     module = normalize_module(_module_from_query(last_user_text))
-    return build_ui_state_for_module(module, last_user_text=last_user_text)
+    sub_state = _sub_state_from_query(module, last_user_text)
+    return build_ui_state_for_module(module, sub_state=sub_state, last_user_text=last_user_text)
 
 
-def build_ui_state_for_module(module: str, last_user_text: str = "") -> Dict[str, Any]:
+def build_ui_state_for_module(module: str, sub_state: str = "overview", last_user_text: str = "") -> Dict[str, Any]:
     """Build ui_state for a specific module."""
     module = normalize_module(module)
     coach_message = "我已根据你的当前意图准备页面，你可以手动操作，也可以让我代你操作。"
@@ -170,7 +185,7 @@ def build_ui_state_for_module(module: str, last_user_text: str = "") -> Dict[str
     return {
         "protocol_version": "coach-ui/1.0",
         "module": module,
-        "sub_state": "overview",
+        "sub_state": sub_state,
         "title": "FitFlow AI 操作系统",
         "coach_message": coach_message,
         "data": {"sections": _default_sections(module)},

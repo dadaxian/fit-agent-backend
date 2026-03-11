@@ -1,10 +1,11 @@
 """fit-agent 节点：brain（LLM）与 executor（tools）。"""
 
 import asyncio
-import logging
 import json
-from typing import Any, Dict, List
+import logging
+import time
 from datetime import datetime
+from typing import Any, Dict, List
 
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -27,7 +28,7 @@ MAX_CONSECUTIVE_NO_TOOL_CALLS = 2  # 最多重试 1 次后强制结束
 REMINDER_NO_CHOICE = """【系统提醒】你上一条消息没有调用工具。你必须在本轮调用工具之一：run_command / ui_command / mark_task_done。
 
 建议：
-- 需要切页：调用 ui_command(action="navigate", module="...", payload={"sub_state":"..."})。
+- 需要切页：调用 ui_command(action="navigate", module="...", payload={"module_tab":"...","sub_state":"..."})。
 - 需要输出任何无法用 1–3 句清晰呈现的内容（长列表/长解释/多日期记录/表格/计划明细等）：不要直接把长内容写进对话；先用 run_command 写入 `workspace/<user_id>/coach_os/blackboard.md`，再用 ui_command 跳转到 workspace/blackboard，并在对话里只输出 1 句总结。
 """
 
@@ -62,6 +63,8 @@ async def agent_node(
     """Brain 节点：调用 LLM，返回 AIMessage（可能带 tool_calls）。"""
     from fit_agent.utils import load_chat_model
 
+    t0 = time.perf_counter()
+    logger.info("[TIMING] brain: node entered (msgs=%d)", len(state.get("messages") or []))
     messages = list(state.get("messages") or [])
     configurable = (config or {}).get("configurable") or {}
     # 优先从 auth 获取 identity（登录用户 id），否则 user_id 或匿名
@@ -69,7 +72,12 @@ async def agent_node(
     user_id = auth_user.get("identity") or configurable.get("user_id") or "dev"
 
     ensure_workspace_skills(user_id)
+    logger.info("[TIMING] brain: ensure_workspace_skills %.3fs", time.perf_counter() - t0)
+
+    t1 = time.perf_counter()
     system_prompt = get_system_prompt(user_id=user_id)
+    logger.info("[TIMING] brain: get_system_prompt %.3fs", time.perf_counter() - t1)
+
     from fit_agent.context import Context
 
     ctx = runtime.context if runtime.context is not None else Context()
@@ -78,14 +86,21 @@ async def agent_node(
     # ChatZhipuAI 仅支持 tool_choice="auto"，无法强制；需用支持工具调用的模型（如 glm-4.7-flash）
     llm_with_tools = model.bind_tools(tools)
 
+    t2 = time.perf_counter()
     memory_context = build_memory_context(user_id)
+    logger.info("[TIMING] brain: build_memory_context %.3fs", time.perf_counter() - t2)
+
+    t3 = time.perf_counter()
     messages = apply_forgetting_to_messages(user_id, messages)
+    logger.info("[TIMING] brain: apply_forgetting_to_messages %.3fs (msgs=%d)", time.perf_counter() - t3, len(messages))
 
     all_messages = [SystemMessage(content=system_prompt)]
     if memory_context:
         all_messages.append(SystemMessage(content=memory_context))
     all_messages += messages
+    t4 = time.perf_counter()
     response = await llm_with_tools.ainvoke(all_messages, config=config or {})
+    logger.info("[TIMING] brain: llm_ainvoke %.3fs", time.perf_counter() - t4)
     if isinstance(response, AIMessage):
         extra = dict(getattr(response, "additional_kwargs", {}) or {})
         extra.setdefault("timestamp", now_with_tz().isoformat())
@@ -115,8 +130,10 @@ async def agent_node(
 
 def _route_after_agent(state: Dict[str, Any], config: RunnableConfig) -> str:
     """Agent 之后：有 tool_calls → tools；无且 task_complete → end；否则继续或强制 end。"""
+    t0 = time.perf_counter()
     messages = state.get("messages") or []
     if not messages:
+        logger.info("[TIMING] route_after_agent -> end (no messages) %.3fs", time.perf_counter() - t0)
         return "end"
     
     # 提取 user_id 用于后台任务
@@ -157,14 +174,17 @@ def _route_after_agent(state: Dict[str, Any], config: RunnableConfig) -> str:
             asyncio.run_coroutine_threadsafe(_bg_task(), asyncio.get_event_loop())
 
     if not isinstance(last, AIMessage):
+        logger.info("[TIMING] route_after_agent -> end (not AIMessage) %.3fs", time.perf_counter() - t0)
         trigger_memory_task()
         return "end"
     
     tool_calls = getattr(last, "tool_calls", None) or []
     if tool_calls:
+        logger.info("[TIMING] route_after_agent -> tools %.3fs", time.perf_counter() - t0)
         return "tools"
     
     if state.get("task_complete"):
+        logger.info("[TIMING] route_after_agent -> end (task_complete) %.3fs", time.perf_counter() - t0)
         trigger_memory_task()
         return "end"
     
@@ -179,16 +199,17 @@ def _route_after_agent(state: Dict[str, Any], config: RunnableConfig) -> str:
                 text = (block.get("text") or "").strip()
                 break
     if text:
-        logger.info("Agent 已输出结论但未调用 mark_task_done，视为完成并结束")
+        logger.info("[TIMING] route_after_agent -> end (has text) %.3fs | Agent 已输出结论但未调用 mark_task_done，视为完成并结束", time.perf_counter() - t0)
         trigger_memory_task()
         return "end"
     
     consecutive = state.get("consecutive_no_tool_calls", 0)
     if consecutive >= MAX_CONSECUTIVE_NO_TOOL_CALLS:
-        logger.warning(f"连续 {consecutive} 轮无 tool_calls 且未 mark_task_done，强制结束")
+        logger.warning("[TIMING] route_after_agent -> end (max consecutive) %.3fs | 连续 %d 轮无 tool_calls 且未 mark_task_done，强制结束", time.perf_counter() - t0, consecutive)
         trigger_memory_task()
         return "end"
-    
+
+    logger.info("[TIMING] route_after_agent -> agent %.3fs", time.perf_counter() - t0)
     return "agent"
 
 
@@ -234,6 +255,7 @@ async def _execute_single_tool(
 
 async def tools_node(state: Dict[str, Any], config: RunnableConfig) -> Dict[str, Any]:
     """Executor 节点：执行 tool_calls。"""
+    t0 = time.perf_counter()
     configurable = (config or {}).get("configurable") or {}
     auth_user = configurable.get("langgraph_auth_user") or {}
     user_id = auth_user.get("identity") or configurable.get("user_id") or "dev"
@@ -278,8 +300,12 @@ async def tools_node(state: Dict[str, Any], config: RunnableConfig) -> Dict[str,
         (tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "")) == "mark_task_done"
         for tc in tool_calls
     )
+    logger.info("[TIMING] executor: total %.3fs (tools=%s)", time.perf_counter() - t0, [tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "") for tc in tool_calls])
     return {"messages": tool_messages, "task_complete": task_complete}
 
 
 def route_after_tools(state: Dict[str, Any]) -> str:
-    return "end" if state.get("task_complete") else "agent"
+    t0 = time.perf_counter()
+    out = "end" if state.get("task_complete") else "agent"
+    logger.info("[TIMING] route_after_tools -> %s %.3fs", out, time.perf_counter() - t0)
+    return out

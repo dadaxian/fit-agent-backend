@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Coach OS 页面原型</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+      background: linear-gradient(135deg, rgba(0,180,180,0.14), rgba(255,140,0,0.1), #f5f5f7);
+      min-height: 100vh;
+      padding-bottom: 120px;
+    }
+    .container { max-width: 420px; margin: 0 auto; padding: 16px; }
+
+    /* Tab Bar */
+    .tab-bar {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      margin-bottom: 8px;
+      overflow-x: auto;
+    }
+    .tab {
+      flex-shrink: 0;
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.5);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab.active { background: rgba(255,140,0,0.25); color: #c55a00; font-weight: 600; }
+    .tab:hover { background: rgba(255,255,255,0.9); }
+
+    /* Cards */
+    .card {
+      background: rgba(255,255,255,0.7);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(255,255,255,0.6);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #1d1d1f;
+    }
+    .card-subtitle { font-size: 12px; color: #86868b; margin-bottom: 8px; }
+
+    /* Plan items - clickable */
+    .plan-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.8);
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.06);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .plan-item:hover { background: rgba(255,140,0,0.08); }
+    .plan-item.rest { opacity: 0.7; }
+    .plan-item .left { display: flex; flex-direction: column; gap: 2px; }
+    .plan-item .day { font-weight: 600; font-size: 15px; }
+    .plan-item .focus { font-size: 13px; color: #515154; }
+    .plan-item .badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      background: rgba(255,140,0,0.15);
+      color: #c55a00;
+    }
+    .plan-item .arrow { color: #86868b; font-size: 12px; }
+
+    /* Diet section */
+    .diet-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.8);
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.06);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .diet-item:hover { background: rgba(0,180,180,0.08); }
+    .diet-item .icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(0,180,180,0.2); margin-right: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .diet-item .meal { font-weight: 600; font-size: 15px; }
+    .diet-item .cal { font-size: 12px; color: #86868b; }
+    .diet-item .arrow { margin-left: auto; color: #86868b; }
+
+    /* Detail modal */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal.show { display: flex; }
+    .modal-content {
+      width: 100%;
+      max-width: 420px;
+      max-height: 75vh;
+      background: #fff;
+      border-radius: 20px 20px 0 0;
+      padding: 20px;
+      overflow-y: auto;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .modal-title { font-size: 18px; font-weight: 600; }
+    .modal-close { font-size: 24px; color: #86868b; cursor: pointer; padding: 4px; }
+
+    /* Exercise list in detail */
+    .exercise-row {
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      font-size: 14px;
+    }
+    .exercise-row:last-child { border-bottom: none; }
+    .exercise-row .num { width: 24px; color: #86868b; margin-right: 12px; }
+    .exercise-row .name { flex: 1; font-weight: 500; }
+    .exercise-row .sets { color: #515154; }
+
+    /* Training session */
+    .training-current {
+      text-align: center;
+      padding: 24px 0;
+    }
+    .training-current .exercise-name { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+    .training-current .progress { font-size: 15px; color: #515154; margin-bottom: 20px; }
+    .training-current .target { font-size: 14px; color: #86868b; }
+    .rest-timer {
+      font-size: 48px;
+      font-weight: 200;
+      color: #ff8c00;
+      margin: 16px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .quick-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+    .btn {
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #ff8c00; color: #fff; }
+    .btn-primary:hover { background: #e67e00; }
+    .btn-secondary { background: rgba(0,0,0,0.06); color: #1d1d1f; }
+    .btn-secondary:hover { background: rgba(0,0,0,0.1); }
+    .sets-done {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .set-chip {
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      background: rgba(255,140,0,0.15);
+      color: #c55a00;
+    }
+    .set-chip.pending { background: rgba(0,0,0,0.06); color: #86868b; }
+    .training-status {
+      font-size: 13px;
+      color: #86868b;
+      margin-top: 8px;
+    }
+    .training-empty {
+      color: #86868b;
+      font-size: 14px;
+      text-align: center;
+      padding: 18px 0;
+    }
+    .exercise-row.active {
+      background: rgba(255,140,0,0.12);
+      border-radius: 10px;
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+    .exercise-row.done .name { color: #86868b; }
+    .exercise-row.done .sets { color: #16a34a; }
+    .companion-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .companion-switch {
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(0,0,0,0.04);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: #515154;
+      cursor: pointer;
+    }
+    .companion-switch.on {
+      background: rgba(0,180,180,0.18);
+      color: #006d6d;
+      border-color: rgba(0,180,180,0.35);
+    }
+    .coach-hint {
+      font-size: 12px;
+      color: #86868b;
+      margin-top: 4px;
+    }
+    .voice-commands {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .voice-btn {
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.9);
+      cursor: pointer;
+      color: #515154;
+    }
+    .companion-feed {
+      margin-top: 10px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #515154;
+    }
+    .companion-feed .label { color: #86868b; margin-right: 6px; }
+    .wearable-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .wearable-item {
+      background: rgba(255,255,255,0.85);
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+    }
+    .wearable-item .k {
+      font-size: 11px;
+      color: #86868b;
+      margin-bottom: 4px;
+    }
+    .wearable-item .v {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+    .activity-layer-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .activity-layer-tab {
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.8);
+      border-radius: 999px;
+      font-size: 12px;
+      padding: 6px 10px;
+      color: #515154;
+      cursor: pointer;
+    }
+    .activity-layer-tab.active {
+      background: rgba(255,140,0,0.18);
+      border-color: rgba(255,140,0,0.35);
+      color: #c55a00;
+      font-weight: 600;
+    }
+    .activity-preview-empty {
+      font-size: 12px;
+      color: #86868b;
+      padding: 6px 0 2px;
+    }
+    .activity-card {
+      border: 1px solid rgba(0,0,0,0.06);
+      background: rgba(255,255,255,0.85);
+      border-radius: 12px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .activity-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .activity-card-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+    .activity-badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .activity-badge {
+      font-size: 10px;
+      border-radius: 999px;
+      padding: 2px 7px;
+      background: rgba(0,0,0,0.05);
+      color: #6b7280;
+    }
+    .activity-badge.layer-generic { background: rgba(0,0,0,0.08); }
+    .activity-badge.layer-template { background: rgba(0,120,255,0.15); color: #0b69c7; }
+    .activity-badge.layer-free { background: rgba(0,180,180,0.18); color: #007575; }
+    .activity-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .activity-metric {
+      background: rgba(0,0,0,0.03);
+      border-radius: 8px;
+      padding: 6px 8px;
+    }
+    .activity-metric .k { font-size: 10px; color: #86868b; }
+    .activity-metric .v { font-size: 13px; color: #1d1d1f; font-weight: 600; margin-top: 2px; }
+    .activity-note { margin-top: 8px; font-size: 11px; color: #6b7280; line-height: 1.5; }
+    body.companion-on .training-current .exercise-name { font-size: 30px; }
+    body.companion-on .training-current .progress { font-size: 18px; }
+    body.companion-on .training-current .target { font-size: 16px; }
+    body.companion-on .rest-timer { font-size: 64px; }
+
+    /* Assessment */
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-label { font-size: 15px; color: #515154; }
+    .metric-value { font-size: 17px; font-weight: 600; }
+    .metric-hint { font-size: 12px; color: #86868b; margin-top: 2px; }
+
+    /* Week date strip */
+    .date-picker-row {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .date-picker-main {
+      flex: 1;
+      min-width: 0;
+    }
+    .date-picker-main .month-view { margin-bottom: 0; }
+    .week-strip-wrap {
+      display: block;
+    }
+    .week-strip-wrap.hidden { display: none; }
+    .week-strip {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.7);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.6);
+    }
+    .week-day {
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .week-day:hover { background: rgba(255,255,255,0.8); }
+    .week-day.active {
+      background: rgba(255,140,0,0.25);
+      color: #c55a00;
+      font-weight: 600;
+    }
+    .week-day .label { font-size: 11px; color: #86868b; margin-bottom: 4px; }
+    .week-day.active .label { color: #c55a00; }
+    .week-day .date { font-size: 15px; font-weight: 600; }
+    .expand-btn {
+      flex-shrink: 0;
+      width: 44px;
+      font-size: 18px;
+      padding: 0;
+      background: rgba(255,255,255,0.7);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.6);
+      cursor: pointer;
+      color: #515154;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .expand-btn:hover { background: rgba(255,140,0,0.15); color: #c55a00; }
+
+    .week-day-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      margin: 0 auto 4px;
+      background: rgba(0,0,0,0.08);
+    }
+    .week-day-dot.train-done { background: rgba(255,140,0,0.6); }
+    .week-day-dot.diet-done { background: rgba(0,180,180,0.5); }
+    .week-day-dot.both-done { background: linear-gradient(135deg, rgba(255,140,0,0.6) 50%, rgba(0,180,180,0.5) 50%); }
+    .week-day-dot.rest { background: rgba(0,0,0,0.05); }
+    .week-day-dot.rest-done { background: rgba(0,180,180,0.4); }
+
+    /* 一维时间轴：极简，蓝红表示卡路里强度 */
+    .day-timeline {
+      margin-bottom: 12px;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.5);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.5);
+    }
+    .timeline-axis { position: relative; }
+    .timeline-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #86868b;
+      margin-bottom: 6px;
+      padding: 0 2px;
+    }
+    .timeline-scale span { flex-shrink: 0; }
+    .timeline-track {
+      position: relative;
+      height: 28px;
+      background: linear-gradient(90deg, rgba(30,30,35,0.4) 0%, rgba(255,200,80,0.35) 50%, rgba(30,30,35,0.4) 100%);
+      border-radius: 6px;
+      overflow: visible;
+    }
+    .timeline-now {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #ff6b00;
+      z-index: 1;
+      box-shadow: 0 0 6px rgba(255,107,0,0.6);
+    }
+    .timeline-dot {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      cursor: pointer;
+      z-index: 2;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .timeline-dot:hover { transform: translate(-50%, -50%) scale(1.2); }
+    .timeline-dot.train {
+      width: 4px;
+      height: 18px;
+      border-radius: 2px;
+      background: rgba(255,140,0,0.6);
+    }
+    .timeline-dot.done { opacity: 0.9; box-shadow: 0 0 0 2px rgba(0,200,0,0.5); }
+    .timeline-dot.planned { opacity: 0.7; }
+    .timeline-legend {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 6px;
+      font-size: 10px;
+      color: #86868b;
+    }
+    .timeline-legend-bar {
+      width: 48px;
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #4a90d9, #e74c3c);
+    }
+    .cal-progress { margin-top: 8px; }
+    .cal-progress-bar { height: 6px; background: rgba(0,0,0,0.08); border-radius: 3px; overflow: hidden; }
+    .cal-progress-fill { height: 100%; background: linear-gradient(90deg, #4a90d9, #e74c3c); border-radius: 3px; transition: width 0.3s; }
+    .cal-progress-text { font-size: 11px; color: #86868b; margin-top: 4px; }
+    .cal-macro { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+    .cal-macro-item { flex: 1; min-width: 70px; }
+    .cal-macro-item .label { font-size: 10px; color: #86868b; margin-bottom: 2px; }
+    .cal-macro-item .bar { height: 4px; background: rgba(0,0,0,0.06); border-radius: 2px; overflow: hidden; }
+    .cal-macro-item .fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+    .cal-macro-item.protein .fill { background: #e74c3c; }
+    .cal-macro-item.carb .fill { background: #3498db; }
+    .cal-macro-item.fat .fill { background: #f39c12; }
+    .cal-macro-item .val { font-size: 10px; color: #515154; margin-top: 2px; }
+    .expand-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .expand-tab { padding: 6px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; background: rgba(0,0,0,0.06); color: #515154; }
+    .expand-tab.active { background: rgba(255,140,0,0.2); color: #c55a00; font-weight: 500; }
+    .expand-tab.diet.active { background: rgba(0,180,180,0.2); color: #0a7a7a; }
+
+    /* Month view */
+    .month-view {
+      display: none;
+      background: rgba(255,255,255,0.9);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255,255,255,0.6);
+    }
+    .month-view.show { display: block; }
+    .month-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .month-nav span { font-weight: 600; font-size: 16px; }
+    .month-nav button { background: none; border: none; font-size: 20px; cursor: pointer; color: #515154; padding: 4px 8px; }
+    .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .month-grid .weekday-header { font-size: 11px; color: #86868b; text-align: center; padding: 4px 0; }
+    .month-grid .date-cell {
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;
+    }
+    .month-grid .date-cell:hover { background: rgba(255,140,0,0.15); }
+    .month-grid .date-cell.selected { background: rgba(255,140,0,0.3); color: #c55a00; font-weight: 600; }
+    .month-grid .date-cell.today { border: 1px solid #ff8c00; }
+    .month-grid .date-cell.other-month { color: #c7c7cc; }
+    .month-grid .date-cell.rest-day { color: #86868b; }
+
+    /* Exercise list in train card */
+    .train-exercise { display: flex; align-items: center; padding: 6px 0; font-size: 13px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .train-exercise:last-child { border-bottom: none; }
+    .train-exercise .num { width: 18px; color: #86868b; margin-right: 8px; }
+    .train-exercise .name { flex: 1; }
+    .train-exercise .sets { color: #515154; font-size: 12px; }
+    .train-rest-hint { padding: 8px 0; color: #515154; font-size: 14px; line-height: 1.5; }
+    .train-rest-hint .day { font-weight: 600; color: #1d1d1f; display: block; margin-bottom: 4px; }
+
+    /* Plan two-column layout (overview) */
+    .plan-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .plan-col {
+      flex: 1;
+      min-width: 0;
+    }
+    .plan-col .plan-item,
+    .plan-col .diet-item { padding: 10px 12px; margin-bottom: 6px; }
+    .plan-col .plan-item .day,
+    .plan-col .diet-item .meal { font-size: 14px; }
+    .plan-col .diet-item .icon { width: 32px; height: 32px; font-size: 16px; margin-right: 8px; }
+    @media (max-width: 380px) {
+      .plan-row { flex-direction: column; }
+    }
+
+    /* 计划卡片膨胀：变大挤掉另一侧，同页内过渡 */
+    .plan-row { transition: all 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+    .plan-col { transition: flex 0.35s cubic-bezier(0.32, 0.72, 0, 1), min-width 0.35s, opacity 0.25s; }
+    .plan-row.train-expanded .plan-col:first-child { flex: 1; min-width: 100%; }
+    .plan-row.train-expanded .plan-col:last-child { flex: 0; min-width: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+    .plan-row.diet-expanded .plan-col:first-child { flex: 0; min-width: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+    .plan-row.diet-expanded .plan-col:last-child { flex: 1; min-width: 100%; }
+    .plan-card-expand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .plan-card-back { font-size: 14px; color: #515154; cursor: pointer; }
+    .plan-card-back:hover { color: #c55a00; }
+    .plan-card-expanded { overflow-y: auto; max-height: 50vh; }
+    .plan-row.diet-expanded #diet-card {
+      background: transparent; border: none; box-shadow: none; padding: 0;
+    }
+    .plan-row.diet-expanded #diet-card .plan-card-expanded {
+      overflow: visible; max-height: none;
+    }
+    .plan-overview { transition: gap 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+    .plan-row.train-expanded .plan-overview { gap: 0; }
+    .plan-row.diet-expanded .plan-overview { gap: 0; }
+    /* 训练详情 */
+    .detail-exercise {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px; margin-bottom: 6px;
+      background: rgba(255,255,255,0.8);
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.06);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+    .detail-exercise .num { width: 20px; color: #86868b; font-size: 13px; flex-shrink: 0; }
+    .detail-exercise .name-input { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; }
+    .detail-exercise .sets-input { width: 44px; padding: 6px 4px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 13px; text-align: center; }
+    .detail-exercise .reps-input { width: 48px; padding: 6px 4px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 13px; text-align: center; }
+    .detail-exercise .rest-input { width: 48px; padding: 6px 4px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 13px; text-align: center; }
+    .detail-exercise .del-btn { color: #86868b; cursor: pointer; padding: 4px; flex-shrink: 0; font-size: 14px; }
+    .detail-exercise .del-btn:hover { color: #c55a00; }
+    .detail-exercise-header { display: flex; align-items: center; gap: 8px; padding: 0 12px 6px; font-size: 11px; color: #86868b; }
+    .detail-exercise-header .col-num { width: 20px; }
+    .detail-exercise-header .col-name { flex: 1; }
+    .detail-exercise-header .col-sets { width: 44px; text-align: center; }
+    .detail-exercise-header .col-reps { width: 48px; text-align: center; }
+    .detail-exercise-header .col-rest { width: 48px; text-align: center; }
+
+    /* 饮食详情：第1/2/3餐（不强制早午晚） */
+    .diet-detail-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      background: rgba(255,255,255,0.8);
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.06);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+    .diet-detail-icon {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      background: rgba(0,180,180,0.15);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .diet-detail-body { flex: 1; min-width: 0; }
+    .diet-detail-meal-input { font-weight: 600; font-size: 15px; margin-bottom: 6px; color: #1d1d1f; border: none; background: transparent; width: 100%; padding: 4px 0; border-bottom: 1px dashed rgba(0,0,0,0.15); }
+    .diet-detail-desc { font-size: 14px; color: #515154; line-height: 1.5; margin-bottom: 4px; }
+    .diet-detail-desc-input { width: 100%; padding: 8px 10px; margin-bottom: 6px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; resize: vertical; min-height: 60px; }
+    .diet-detail-cal { font-size: 12px; color: #86868b; }
+    .diet-detail-time-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .diet-detail-time-row input { width: 60px; padding: 4px 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 13px; }
+    .meal-done-btn { padding: 4px 10px; font-size: 12px; border-radius: 8px; border: 1px solid rgba(0,180,180,0.4); background: rgba(0,180,180,0.1); color: #0a7a7a; cursor: pointer; }
+    .meal-done-btn.done { background: rgba(0,180,180,0.25); }
+    .diet-del-btn { margin-left: auto; color: #86868b; cursor: pointer; padding: 4px; font-size: 14px; }
+    .diet-del-btn:hover { color: #e74c3c; }
+    .diet-detail-cal-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+    .diet-detail-cal-row input { width: 70px; padding: 4px 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 13px; }
+
+    /* Page visibility */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* CTA */
+    .cta-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 16px;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    .cta-bar .btn { width: 100%; padding: 14px; }
+    .ask-coach-link { font-size: 12px; color: #86868b; cursor: pointer; }
+    .ask-coach-link:hover { color: #c55a00; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="tab-bar">
+      <div class="tab active" data-page="plans">计划</div>
+      <div class="tab" data-page="training">训练</div>
+      <div class="tab" data-page="assessment">评估</div>
+    </div>
+
+    <!-- ========== 计划页面 ========== -->
+    <div id="page-plans" class="page active">
+      <!-- 日期选择区域（含本周完成度） -->
+      <div class="date-picker-row">
+        <div class="date-picker-main">
+          <div id="week-strip-wrap" class="week-strip-wrap">
+            <div class="week-strip" id="week-strip"></div>
+          </div>
+          <!-- 月视图（展开后显示） -->
+          <div class="month-view" id="month-view">
+            <div class="month-nav">
+              <button type="button" id="month-prev">‹</button>
+              <span id="month-title">2025年3月</span>
+              <button type="button" id="month-next">›</button>
+            </div>
+            <div class="month-grid" id="month-grid"></div>
+          </div>
+        </div>
+        <button class="expand-btn" id="expand-btn" title="月视图">📅</button>
+      </div>
+
+      <!-- 一维时间轴：展示当日训练与就餐计划 -->
+      <div class="day-timeline" id="day-timeline">
+        <div class="timeline-axis">
+          <div class="timeline-scale" id="timeline-scale"></div>
+          <div class="timeline-track" id="timeline-track"></div>
+        </div>
+        <div class="timeline-legend">
+          <span>| 训练</span>
+          <span><span class="timeline-legend-bar"></span> 蓝低→红高 kcal</span>
+        </div>
+        <div class="cal-progress" id="cal-progress">
+          <div class="cal-progress-bar"><div class="cal-progress-fill" id="cal-progress-fill" style="width:0%"></div></div>
+          <div class="cal-progress-text" id="cal-progress-text">已摄入 0 / 目标 0 kcal</div>
+          <div class="cal-macro" id="cal-macro">
+            <div class="cal-macro-item protein"><div class="label">蛋白质</div><div class="bar"><div class="fill" id="macro-protein" style="width:0%"></div></div><div class="val" id="macro-protein-val">0 / 0 g</div></div>
+            <div class="cal-macro-item carb"><div class="label">碳水</div><div class="bar"><div class="fill" id="macro-carb" style="width:0%"></div></div><div class="val" id="macro-carb-val">0 / 0 g</div></div>
+            <div class="cal-macro-item fat"><div class="label">脂肪</div><div class="bar"><div class="fill" id="macro-fat" style="width:0%"></div></div><div class="val" id="macro-fat-val">0 / 0 g</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 概览：训练 | 饮食 左右并排，点击后卡片膨胀挤掉另一侧 -->
+      <div class="plan-row" id="plan-row">
+        <div class="plan-overview" style="display: flex; gap: 12px; width: 100%;">
+          <div class="plan-col">
+            <div class="card" id="train-card">
+              <div class="plan-card-overview" id="train-overview">
+                <div class="card-title">训练计划</div>
+                <div class="card-subtitle" id="train-subtitle">目标：增肌 · 每周 4 天</div>
+                <div id="train-content"></div>
+              </div>
+              <div class="plan-card-expanded" id="train-expanded" style="display: none;">
+                <div class="expand-tabs" id="expand-tabs">
+                  <span class="expand-tab active" data-expand="train">训练</span>
+                  <span class="expand-tab diet" data-expand="diet">饮食</span>
+                </div>
+                <div class="plan-card-expand-header">
+                  <span class="plan-card-back" id="train-back">← 返回</span>
+                  <span class="card-subtitle" id="train-expanded-subtitle"></span>
+                </div>
+                <div class="train-time-row" id="train-time-row" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+                  <span style="font-size:12px;color:#86868b;">计划时间</span>
+                  <input type="text" id="train-time-input" placeholder="如 18:30" style="width:70px;padding:6px 8px;border:1px solid rgba(0,0,0,0.1);border-radius:8px;font-size:13px;">
+                </div>
+                <div id="train-exercises"></div>
+                <div id="train-activity-panel" style="margin-top:10px;">
+                  <div class="card-title" style="font-size:14px;margin-bottom:8px;">活动训练三层模型（训练详情）</div>
+                  <div class="card-subtitle">默认用通用卡片；高频项目用增强模板；无法量化时走自由记录。</div>
+                  <div class="activity-layer-tabs" id="activity-layer-tabs">
+                    <button class="activity-layer-tab active" data-layer="all" type="button">全部</button>
+                    <button class="activity-layer-tab" data-layer="generic" type="button">通用层</button>
+                    <button class="activity-layer-tab" data-layer="template" type="button">增强模板层</button>
+                    <button class="activity-layer-tab" data-layer="free" type="button">自由记录层</button>
+                  </div>
+                  <div id="activity-layer-preview"></div>
+                </div>
+                <button class="btn btn-primary" id="train-start-btn" style="width:100%;margin-top:12px;">开始训练</button>
+              </div>
+            </div>
+          </div>
+          <div class="plan-col">
+            <div class="card" id="diet-card">
+              <div class="plan-card-overview" id="diet-overview">
+                <div class="card-title">饮食计划</div>
+                <div class="card-subtitle" id="diet-subtitle">今日目标：约 2200 kcal</div>
+                <div id="diet-content"></div>
+              </div>
+              <div class="plan-card-expanded" id="diet-expanded" style="display: none;">
+                <div class="expand-tabs" id="expand-tabs-diet">
+                  <span class="expand-tab" data-expand="train">训练</span>
+                  <span class="expand-tab diet active" data-expand="diet">饮食</span>
+                </div>
+                <div class="plan-card-expand-header">
+                  <span class="plan-card-back" id="diet-back">← 返回</span>
+                  <span class="card-subtitle" id="diet-expanded-subtitle"></span>
+                </div>
+                <div id="diet-expanded-content"></div>
+                <button class="btn btn-secondary" id="diet-add-meal" style="width:100%;margin-top:8px;font-size:13px;">+ 添加一餐</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 训练页面 ========== -->
+    <div id="page-training" class="page">
+      <div class="card">
+        <div class="card-title">教练陪伴模式</div>
+        <div class="companion-row">
+          <div>
+            <div class="card-subtitle" id="companion-mode-status">当前：关闭</div>
+            <div class="coach-hint">开启后会进入大字展示，并可模拟语音指令。</div>
+          </div>
+          <button class="companion-switch" id="companion-toggle-btn" type="button">开启</button>
+        </div>
+        <div class="voice-commands" id="voice-commands">
+          <button class="voice-btn" type="button" data-voice-cmd="start">开始训练</button>
+          <button class="voice-btn" type="button" data-voice-cmd="done">完成本组</button>
+          <button class="voice-btn" type="button" data-voice-cmd="rest">休息一下</button>
+          <button class="voice-btn" type="button" data-voice-cmd="heavy">太重了</button>
+          <button class="voice-btn" type="button" data-voice-cmd="light">太轻了</button>
+          <button class="voice-btn" type="button" data-voice-cmd="end">结束训练</button>
+        </div>
+        <div class="companion-feed">
+          <div><span class="label">麦克风</span><span id="companion-last-heard">-</span></div>
+          <div><span class="label">AI 教练</span><span id="companion-last-coach">准备就绪，随时开始。</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" id="training-title">今日训练</div>
+        <div class="card-subtitle" id="training-subtitle">未开始</div>
+        <div class="training-current" id="training-current"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">可穿戴数据（占位）</div>
+        <div class="wearable-grid">
+          <div class="wearable-item"><div class="k">连接</div><div class="v" id="wearable-conn">已连接</div></div>
+          <div class="wearable-item"><div class="k">心率</div><div class="v" id="wearable-hr">86 bpm</div></div>
+          <div class="wearable-item"><div class="k">负荷</div><div class="v" id="wearable-load">低</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">今日动作列表</div>
+        <div id="training-exercise-list"></div>
+      </div>
+    </div>
+
+    <!-- ========== 评估页面 ========== -->
+    <div id="page-assessment" class="page">
+      <div class="card">
+        <div class="card-title">身体数据</div>
+        <div class="metric-row">
+          <div>
+            <div class="metric-label">体重</div>
+            <div class="metric-hint">最近记录：3月6日</div>
+          </div>
+          <div class="metric-value">72 kg</div>
+        </div>
+        <div class="metric-row">
+          <div>
+            <div class="metric-label">体脂率</div>
+            <div class="metric-hint">可选</div>
+          </div>
+          <div class="metric-value" style="color: #86868b;">未记录</div>
+        </div>
+        <div class="metric-row">
+          <div>
+            <div class="metric-label">腰围</div>
+            <div class="metric-hint">cm</div>
+          </div>
+          <div class="metric-value">85 cm</div>
+        </div>
+        <button class="btn btn-secondary" style="width: 100%; margin-top: 12px;">录入/更新数据</button>
+      </div>
+      <div class="card">
+        <div class="card-title">训练表现</div>
+        <div class="metric-row">
+          <div class="metric-label">本周完成率</div>
+          <div class="metric-value">75%</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-label">本周训练容量</div>
+          <div class="metric-hint">组×重量×次数</div>
+          <div class="metric-value">18,200 kg</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-label">深蹲 PR</div>
+          <div class="metric-hint">1RM 估算</div>
+          <div class="metric-value">95 kg</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta-bar">
+    <button class="btn btn-primary" id="cta-coach">和教练说</button>
+    <div style="display:flex;gap:8px;margin-top:8px;justify-content:center;">
+      <span class="ask-coach-link" data-ctx="train">问训练</span>
+      <span class="ask-coach-link" data-ctx="diet">问饮食</span>
+    </div>
+  </div>
+
+  <script>
+    // 每周计划数据：0=周日, 1=周一, ..., 6=周六
+    const WEEK_DATA = {
+      0: { train: { rest: true, focus: '休息', hint: '建议拉伸、补水', time: null }, diet: { total: 2000, targetP: 120, targetCarbs: 220, targetF: 65, meals: [
+        { n: '第1餐', c: 480, p: 28, carbs: 55, f: 16, time: '08:00', desc: '燕麦 50g + 鸡蛋 2 个 + 牛奶 200ml + 香蕉 1 根' },
+        { n: '第2餐', c: 720, p: 42, carbs: 82, f: 22, time: '12:30', desc: '糙米饭 150g + 鸡胸肉 120g + 西兰花 + 番茄炒蛋' },
+        { n: '第3餐', c: 800, p: 50, carbs: 83, f: 27, time: '19:00', desc: '红薯 200g + 清蒸鱼 150g + 凉拌菠菜 + 豆腐汤' }
+      ] } },
+      1: { train: { rest: false, focus: '胸+三头', count: 5, time: '18:30', duration: 60, exercises: [
+        { name: '杠铃卧推', sets: 4, reps: '8-10', rest: 90 },
+        { name: '上斜哑铃卧推', sets: 4, reps: '8', rest: 75 },
+        { name: '哑铃飞鸟', sets: 3, reps: '12', rest: 60 },
+        { name: '绳索下压', sets: 3, reps: '12', rest: 60 },
+        { name: '哑铃臂屈伸', sets: 3, reps: '12', rest: 60 }
+      ]}, diet: { total: 2200, targetP: 130, targetCarbs: 240, targetF: 70, meals: [
+        { n: '第1餐', c: 520, p: 30, carbs: 60, f: 18, time: '07:30', desc: '全麦面包 2 片 + 鸡蛋 2 个 + 牛奶 200ml + 苹果 1 个' },
+        { n: '第2餐', c: 750, p: 45, carbs: 85, f: 24, time: '12:00', desc: '米饭 180g + 牛肉 150g + 青椒炒肉 + 紫菜蛋花汤' },
+        { n: '第3餐', c: 680, p: 40, carbs: 75, f: 22, time: '18:00', desc: '玉米 1 根 + 三文鱼 120g + 蒜蓉西兰花 + 菌菇汤' }
+      ] } },
+      2: { train: { rest: false, focus: '背+二头', count: 5, time: '07:00', duration: 55, exercises: [
+        { name: '硬拉', sets: 4, reps: '6-8', rest: 120 },
+        { name: '引体向上', sets: 4, reps: '8', rest: 90 },
+        { name: '杠铃划船', sets: 4, reps: '10', rest: 90 },
+        { name: '哑铃弯举', sets: 3, reps: '12', rest: 60 },
+        { name: '锤式弯举', sets: 3, reps: '12', rest: 60 }
+      ]}, diet: { total: 2200, targetP: 130, targetCarbs: 240, targetF: 70, meals: [
+        { n: '第1餐', c: 520, p: 30, carbs: 60, f: 18, time: '08:00', desc: '燕麦 50g + 鸡蛋 2 个 + 牛奶 200ml + 香蕉 1 根' },
+        { n: '第2餐', c: 750, p: 45, carbs: 85, f: 24, time: '12:30', desc: '糙米饭 150g + 鸡胸肉 120g + 西兰花 + 番茄炒蛋' },
+        { n: '第3餐', c: 680, p: 40, carbs: 75, f: 22, time: '19:00', desc: '红薯 200g + 清蒸鱼 150g + 凉拌菠菜 + 豆腐汤' }
+      ] } },
+      3: { train: { rest: false, focus: '腿', count: 4, time: '18:00', duration: 50, exercises: [
+        { name: '杠铃深蹲', sets: 4, reps: '8-10', rest: 90 },
+        { name: '腿举', sets: 3, reps: '12', rest: 60 },
+        { name: '腿弯举', sets: 3, reps: '12', rest: 60 },
+        { name: '提踵', sets: 4, reps: '15', rest: 45 }
+      ]}, diet: { total: 2200, targetP: 130, targetCarbs: 240, targetF: 70, meals: [
+        { n: '第1餐', c: 520, p: 30, carbs: 60, f: 18, time: '07:30', desc: '全麦面包 2 片 + 鸡蛋 2 个 + 牛奶 200ml + 苹果 1 个' },
+        { n: '第2餐', c: 750, p: 45, carbs: 85, f: 24, time: '12:00', desc: '米饭 180g + 牛肉 150g + 青椒炒肉 + 紫菜蛋花汤' },
+        { n: '第3餐', c: 680, p: 40, carbs: 75, f: 22, time: '18:30', desc: '玉米 1 根 + 三文鱼 120g + 蒜蓉西兰花 + 菌菇汤' }
+      ] } },
+      4: { train: { rest: true, focus: '休息', hint: '建议拉伸、补水', time: null }, diet: { total: 2000, targetP: 120, targetCarbs: 220, targetF: 65, meals: [
+        { n: '第1餐', c: 480, p: 28, carbs: 55, f: 16, time: '08:00', desc: '燕麦 50g + 鸡蛋 2 个 + 牛奶 200ml + 香蕉 1 根' },
+        { n: '第2餐', c: 720, p: 42, carbs: 82, f: 22, time: '12:30', desc: '糙米饭 150g + 鸡胸肉 120g + 西兰花 + 番茄炒蛋' },
+        { n: '第3餐', c: 800, p: 50, carbs: 83, f: 27, time: '19:00', desc: '红薯 200g + 清蒸鱼 150g + 凉拌菠菜 + 豆腐汤' }
+      ] } },
+      5: { train: { rest: false, focus: '肩', count: 4, time: '19:00', duration: 45, exercises: [
+        { name: '杠铃推举', sets: 4, reps: '8', rest: 90 },
+        { name: '哑铃侧平举', sets: 3, reps: '12', rest: 60 },
+        { name: '俯身飞鸟', sets: 3, reps: '12', rest: 60 },
+        { name: '面拉', sets: 3, reps: '15', rest: 60 }
+      ]}, diet: { total: 2200, targetP: 130, targetCarbs: 240, targetF: 70, meals: [
+        { n: '第1餐', c: 520, p: 30, carbs: 60, f: 18, time: '08:00', desc: '燕麦 50g + 鸡蛋 2 个 + 牛奶 200ml + 香蕉 1 根' },
+        { n: '第2餐', c: 750, p: 45, carbs: 85, f: 24, time: '12:00', desc: '糙米饭 150g + 鸡胸肉 120g + 西兰花 + 番茄炒蛋' },
+        { n: '第3餐', c: 680, p: 40, carbs: 75, f: 22, time: '18:00', desc: '红薯 200g + 清蒸鱼 150g + 凉拌菠菜 + 豆腐汤' }
+      ] } },
+      6: { train: { rest: false, focus: '有氧/核心', count: 3, time: '09:00', duration: 40, exercises: [
+        { name: '平板支撑', sets: 3, reps: '60秒', rest: 45 },
+        { name: '卷腹', sets: 3, reps: '15', rest: 45 },
+        { name: '慢跑/快走', sets: 1, reps: '30分钟', rest: 0 }
+      ]}, diet: { total: 2100, targetP: 125, targetCarbs: 230, targetF: 68, meals: [
+        { n: '第1餐', c: 500, p: 28, carbs: 58, f: 17, time: '09:00', desc: '全麦面包 2 片 + 鸡蛋 1 个 + 酸奶 150g + 蓝莓' },
+        { n: '第2餐', c: 730, p: 42, carbs: 82, f: 23, time: '13:00', desc: '米饭 160g + 鸡胸肉 100g + 蔬菜沙拉 + 冬瓜汤' },
+        { n: '第3餐', c: 700, p: 40, carbs: 78, f: 22, time: '19:30', desc: '玉米 1 根 + 虾仁 100g + 炒时蔬 + 海带豆腐汤' }
+      ] } }
+    };
+    const DAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const STORAGE_KEY = 'coach-os-plan-data';
+    const ACTIVITY_PREVIEW_ITEMS = [
+      {
+        layer: 'generic',
+        icon: '🏀',
+        name: '篮球对抗',
+        status: '进行中',
+        metrics: [{ k: '时长', v: '45 min' }, { k: 'RPE', v: '7/10' }, { k: '热量', v: '420 kcal' }, { k: '平均心率', v: '142 bpm' }],
+        note: '适合大部分球类和无法标准化动作的运动，先保证可记录。'
+      },
+      {
+        layer: 'template',
+        icon: '🏃',
+        name: '跑步（轻松跑）',
+        status: '已完成',
+        metrics: [{ k: '距离', v: '8.2 km' }, { k: '平均配速', v: "5'45\"/km" }, { k: '平均心率', v: '151 bpm' }, { k: '分段', v: '4 x 2km' }],
+        note: '增强模板展示跑步特有指标，如配速、分段、步频。'
+      },
+      {
+        layer: 'template',
+        icon: '🚴',
+        name: '骑行（节奏）',
+        status: '待开始',
+        metrics: [{ k: '目标时长', v: '60 min' }, { k: '目标功率', v: '180-210 W' }, { k: '目标踏频', v: '85-95 rpm' }, { k: '心率区间', v: 'Z2-Z3' }],
+        note: '增强模板只给高频项目，避免每种运动都做一套 UI。'
+      },
+      {
+        layer: 'free',
+        icon: '🥏',
+        name: '飞盘社交局',
+        status: '已完成',
+        metrics: [{ k: '时长', v: '70 min' }, { k: '体感', v: '中等偏高' }, { k: 'RPE', v: '6/10' }, { k: '备注', v: '风大，冲刺多' }],
+        note: '自由记录层允许“只有主观强度 + 备注”，不强迫填不可靠指标。'
+      }
+    ];
+
+    let selectedDate = new Date();
+    let showMonthView = false;
+    let monthViewDate = new Date();
+    let RECORD = { trainDone: {}, mealDone: {}, consumedCal: {}, consumedP: {}, consumedC: {}, consumedF: {}, restDone: {}, trainingSession: {}, companion: {} };
+    let trainingTickTimer = null;
+    let activityPreviewLayer = 'all';
+
+    function getDateKey(d) { return d ? d.toISOString().slice(0,10) : selectedDate.toISOString().slice(0,10); }
+    function getSelectedDay() { return selectedDate.getDay(); }
+    function saveData() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ week: WEEK_DATA, record: { trainDone: RECORD.trainDone, mealDone: RECORD.mealDone, consumedCal: RECORD.consumedCal, consumedP: RECORD.consumedP, consumedC: RECORD.consumedC, consumedF: RECORD.consumedF, restDone: RECORD.restDone, trainingSession: RECORD.trainingSession, companion: RECORD.companion } }));
+      } catch (e) {}
+    }
+    function loadData() {
+      try {
+        const s = localStorage.getItem(STORAGE_KEY);
+        if (s) {
+          const o = JSON.parse(s);
+          if (o.week) { for (const k in o.week) WEEK_DATA[k] = o.week[k]; }
+          if (o.record) {
+            RECORD.trainDone = o.record.trainDone || {}; RECORD.mealDone = o.record.mealDone || {}; RECORD.consumedCal = o.record.consumedCal || {};
+            RECORD.consumedP = o.record.consumedP || {}; RECORD.consumedC = o.record.consumedC || {}; RECORD.consumedF = o.record.consumedF || {};
+            RECORD.restDone = o.record.restDone || {};
+            RECORD.trainingSession = o.record.trainingSession || {};
+            RECORD.companion = o.record.companion || {};
+            for (const k in RECORD.mealDone) {
+              if (RECORD.consumedP[k] === undefined && RECORD.mealDone[k]) {
+                const day = new Date(k).getDay();
+                const meals = WEEK_DATA[day]?.diet?.meals || [];
+                RECORD.consumedP[k] = meals.reduce((s, x, i) => s + (RECORD.mealDone[k][i] ? (x.p || 0) : 0), 0);
+                RECORD.consumedC[k] = meals.reduce((s, x, i) => s + (RECORD.mealDone[k][i] ? (x.carbs || 0) : 0), 0);
+                RECORD.consumedF[k] = meals.reduce((s, x, i) => s + (RECORD.mealDone[k][i] ? (x.f || 0) : 0), 0);
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    const TIMELINE_START = 6, TIMELINE_END = 22;
+    function timeToPercent(t) {
+      const [h, m] = t.split(':').map(Number);
+      const mins = h * 60 + (m || 0);
+      const startMins = TIMELINE_START * 60;
+      const endMins = TIMELINE_END * 60;
+      return Math.max(0, Math.min(100, ((mins - startMins) / (endMins - startMins)) * 100));
+    }
+    const CAL_MIN = 300, CAL_MAX = 850;
+    function calorieToColor(cal) {
+      const n = Math.max(0, Math.min(1, (cal - CAL_MIN) / (CAL_MAX - CAL_MIN)));
+      const r = Math.round(74 + (231 - 74) * n);
+      const g = Math.round(144 + (76 - 144) * n);
+      const b = Math.round(217 + (60 - 217) * n);
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    }
+    function renderDayTimeline() {
+      const data = WEEK_DATA[getSelectedDay()];
+      const key = getDateKey();
+      const scaleEl = document.getElementById('timeline-scale');
+      const trackEl = document.getElementById('timeline-track');
+      const trainDone = RECORD.trainDone[key];
+      const mealDone = RECORD.mealDone[key] || [];
+      scaleEl.innerHTML = '';
+      for (let h = TIMELINE_START; h <= TIMELINE_END; h += 2) {
+        const s = document.createElement('span');
+        s.textContent = h + ':00';
+        scaleEl.appendChild(s);
+      }
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      const startMins = TIMELINE_START * 60, endMins = TIMELINE_END * 60;
+      const nowPct = Math.max(0, Math.min(100, ((nowMins - startMins) / (endMins - startMins)) * 100));
+      const isToday = selectedDate.toDateString() === now.toDateString();
+      let html = '';
+      if (isToday && nowMins >= startMins && nowMins <= endMins) {
+        html += '<div class="timeline-now" style="left:' + nowPct + '%"></div>';
+      }
+      if (data.train.time && !data.train.rest) {
+        const pct = timeToPercent(data.train.time);
+        const cls = trainDone ? 'timeline-dot train done' : 'timeline-dot train planned';
+        html += '<div class="' + cls + '" style="left:' + pct + '%;" title="' + data.train.time + ' ' + data.train.focus + (trainDone ? ' ✓' : '') + '"></div>';
+      }
+      (data.diet.meals || []).forEach((m, i) => {
+        if (m.time) {
+          const pct = timeToPercent(m.time);
+          const col = calorieToColor(m.c || 500);
+          const done = mealDone[i];
+          const cls = done ? 'timeline-dot diet done' : 'timeline-dot diet planned';
+          html += '<div class="' + cls + '" style="left:' + pct + '%;background:' + col + ';" title="' + m.time + ' ' + (m.c || 0) + ' kcal' + (done ? ' ✓' : '') + '"></div>';
+        }
+      });
+      trackEl.innerHTML = html || '<div style="padding:6px;font-size:11px;color:#86868b;text-align:center;">—</div>';
+      trackEl.querySelectorAll('.timeline-dot.train').forEach(el => {
+        el.addEventListener('click', () => { if (!data.train.rest) expandPlanCard('train'); });
+      });
+      trackEl.querySelectorAll('.timeline-dot.diet').forEach(el => {
+        el.addEventListener('click', () => expandPlanCard('diet'));
+      });
+      renderCalProgress();
+    }
+    function renderCalProgress() {
+      const key = getDateKey();
+      const diet = WEEK_DATA[getSelectedDay()].diet;
+      const target = diet.total || 2000;
+      const consumed = RECORD.consumedCal[key] || 0;
+      const pct = Math.min(100, (consumed / target) * 100);
+      const fill = document.getElementById('cal-progress-fill');
+      const text = document.getElementById('cal-progress-text');
+      if (fill) fill.style.width = pct + '%';
+      if (text) text.textContent = '已摄入 ' + consumed + ' / 目标 ' + target + ' kcal';
+      const tp = diet.targetP || 120, tc = diet.targetCarbs || 220, tf = diet.targetF || 65;
+      const cp = RECORD.consumedP[key] || 0, cc = RECORD.consumedC[key] || 0, cf = RECORD.consumedF[key] || 0;
+      const pp = Math.min(100, (tp ? (cp / tp) * 100 : 0)), pc = Math.min(100, (tc ? (cc / tc) * 100 : 0)), pf = Math.min(100, (tf ? (cf / tf) * 100 : 0));
+      const mp = document.getElementById('macro-protein'), mc = document.getElementById('macro-carb'), mf = document.getElementById('macro-fat');
+      const vp = document.getElementById('macro-protein-val'), vc = document.getElementById('macro-carb-val'), vf = document.getElementById('macro-fat-val');
+      if (mp) mp.style.width = pp + '%'; if (vp) vp.textContent = cp + ' / ' + tp + ' g';
+      if (mc) mc.style.width = pc + '%'; if (vc) vc.textContent = cc + ' / ' + tc + ' g';
+      if (mf) mf.style.width = pf + '%'; if (vf) vf.textContent = cf + ' / ' + tf + ' g';
+    }
+
+    function renderWeekStrip() {
+      const d = new Date();
+      const strip = document.getElementById('week-strip');
+      strip.innerHTML = '';
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay() + i);
+        const k = date.toISOString().slice(0,10);
+        const isActive = selectedDate.toDateString() === date.toDateString();
+        const dayData = WEEK_DATA[date.getDay()];
+        const trainDone = RECORD.trainDone[k];
+        const mealDone = RECORD.mealDone[k] || [];
+        const allMealsDone = dayData.diet.meals && dayData.diet.meals.length > 0 && dayData.diet.meals.every((_, idx) => mealDone[idx]);
+        const restDone = RECORD.restDone[k];
+        let dotCls = 'week-day-dot';
+        if (dayData.train.rest) { dotCls += ' rest'; if (restDone) dotCls += ' rest-done'; }
+        else if (trainDone && allMealsDone) dotCls += ' both-done';
+        else if (trainDone) dotCls += ' train-done';
+        else if (allMealsDone) dotCls += ' diet-done';
+        const el = document.createElement('div');
+        el.className = 'week-day' + (isActive ? ' active' : '');
+        el.dataset.day = i;
+        el.innerHTML = '<div class="' + dotCls + '"></div><div class="label">' + ['日','一','二','三','四','五','六'][i] + '</div><div class="date">' + date.getDate() + '</div>';
+        el.addEventListener('click', () => {
+          selectedDate = date;
+          renderWeekStrip();
+          renderMonthGrid();
+          renderPlanContent();
+          if (planCardExpanded) {
+            const d = WEEK_DATA[date.getDay()];
+            expandPlanCard(expandedType === 'diet' ? 'diet' : (d.train.rest ? 'rest' : 'train'));
+          }
+        });
+        strip.appendChild(el);
+      }
+    }
+
+    function renderMonthGrid() {
+      const grid = document.getElementById('month-grid');
+      const y = monthViewDate.getFullYear(), m = monthViewDate.getMonth();
+      document.getElementById('month-title').textContent = y + '年' + (m + 1) + '月';
+
+      const first = new Date(y, m, 1);
+      const last = new Date(y, m + 1, 0);
+      const startPad = first.getDay();
+      const days = last.getDate();
+
+      let html = '<div class="weekday-header">日</div><div class="weekday-header">一</div><div class="weekday-header">二</div><div class="weekday-header">三</div><div class="weekday-header">四</div><div class="weekday-header">五</div><div class="weekday-header">六</div>';
+
+      for (let i = 0; i < startPad; i++) {
+        const prevDate = new Date(y, m, 1 - (startPad - i));
+        html += '<div class="date-cell other-month">' + prevDate.getDate() + '</div>';
+      }
+      const today = new Date();
+      for (let d = 1; d <= days; d++) {
+        const date = new Date(y, m, d);
+        const isSelected = selectedDate.toDateString() === date.toDateString();
+        const isToday = today.toDateString() === date.toDateString();
+        const dayData = WEEK_DATA[date.getDay()];
+        const isRest = dayData && dayData.train.rest;
+        let cls = 'date-cell';
+        if (isSelected) cls += ' selected';
+        if (isToday) cls += ' today';
+        if (isRest) cls += ' rest-day';
+        html += '<div class="' + cls + '" data-date="' + date.toISOString().slice(0,10) + '">' + d + '</div>';
+      }
+      const totalCells = startPad + days;
+      const remainder = totalCells % 7;
+      if (remainder > 0) {
+        for (let i = 1; i <= 7 - remainder; i++) {
+          html += '<div class="date-cell other-month">' + i + '</div>';
+        }
+      }
+      grid.innerHTML = html;
+      grid.querySelectorAll('.date-cell:not(.other-month)').forEach(cell => {
+        cell.addEventListener('click', () => {
+          selectedDate = new Date(cell.dataset.date);
+          renderWeekStrip();
+          renderMonthGrid();
+          renderPlanContent();
+          if (planCardExpanded) {
+            const d = WEEK_DATA[selectedDate.getDay()];
+            expandPlanCard(expandedType === 'diet' ? 'diet' : (d.train.rest ? 'rest' : 'train'));
+          }
+        });
+      });
+    }
+
+    function renderPlanContent() {
+      renderWeekStrip();
+      renderDayTimeline();
+      const selectedDay = getSelectedDay();
+      const data = WEEK_DATA[selectedDay];
+      const dayName = DAY_LABELS[selectedDay];
+      const isToday = selectedDate.toDateString() === new Date().toDateString();
+
+      // 训练：展示动作列表
+      const trainEl = document.getElementById('train-content');
+      if (data.train.rest) {
+        trainEl.innerHTML = '<div class="train-rest-hint"><span class="day">' + dayName + ' · ' + data.train.focus + '</span><span class="focus">' + data.train.hint + '</span></div>';
+      } else {
+        const exs = (data.train.exercises || []).map((e, i) =>
+          '<div class="train-exercise"><span class="num">' + (i+1) + '</span><span class="name">' + e.name + '</span></div>'
+        ).join('');
+        trainEl.innerHTML = exs;
+      }
+
+      // 当天目标 subtitle
+      document.getElementById('train-subtitle').textContent = data.train.rest
+        ? '目标：休息 · ' + data.train.hint
+        : '目标：' + data.train.focus + ' · ' + data.train.count + ' 个动作';
+
+      // 饮食
+      const dietEl = document.getElementById('diet-content');
+      dietEl.innerHTML = data.diet.meals.map(m => '<div class="diet-item" data-detail="diet-meal" data-meal="' + m.n + '" data-cal="' + m.c + ' kcal"><div class="icon">🍽️</div><div><div class="meal">' + m.n + '</div><div class="cal">约 ' + m.c + ' kcal</div></div><span class="arrow">›</span></div>').join('');
+
+      document.getElementById('diet-subtitle').textContent = '今日目标：约 ' + data.diet.total + ' kcal';
+      renderTrainingPage();
+    }
+
+    function getTrainingSession() {
+      const key = getDateKey();
+      if (!RECORD.trainingSession[key]) {
+        RECORD.trainingSession[key] = { status: 'idle', exerciseIdx: 0, setIdx: 0, completedSets: {}, feedback: {}, restEndAt: 0 };
+      }
+      return RECORD.trainingSession[key];
+    }
+    function getCompanionState() {
+      if (!RECORD.companion || typeof RECORD.companion !== 'object') RECORD.companion = {};
+      if (!RECORD.companion.mode) RECORD.companion.mode = 'normal';
+      if (!RECORD.companion.lastHeard) RECORD.companion.lastHeard = '-';
+      if (!RECORD.companion.lastCoach) RECORD.companion.lastCoach = '准备就绪，随时开始。';
+      if (!RECORD.companion.wearable) RECORD.companion.wearable = { connected: true, hr: 86, load: '低' };
+      return RECORD.companion;
+    }
+    function getExerciseSetCount(exercise) {
+      const v = parseInt(exercise && exercise.sets, 10);
+      return isNaN(v) || v <= 0 ? 1 : v;
+    }
+    function formatRemain(ms) {
+      const total = Math.max(0, Math.ceil(ms / 1000));
+      const m = Math.floor(total / 60);
+      const s = total % 60;
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+    function computeNextExerciseIdx(exercises, session) {
+      for (let i = 0; i < exercises.length; i++) {
+        const done = (session.completedSets[i] || []).length;
+        if (done < getExerciseSetCount(exercises[i])) return i;
+      }
+      return -1;
+    }
+    function startRest(seconds) {
+      const session = getTrainingSession();
+      const sec = Math.max(0, parseInt(seconds, 10) || 0);
+      if (sec <= 0) {
+        session.status = 'active';
+        session.restEndAt = 0;
+        return;
+      }
+      session.status = 'rest';
+      session.restEndAt = Date.now() + sec * 1000;
+    }
+    function startTrainingSessionForSelectedDate() {
+      const data = WEEK_DATA[getSelectedDay()];
+      if (!data || data.train.rest) return;
+      const key = getDateKey();
+      const session = { status: 'active', exerciseIdx: 0, setIdx: 0, completedSets: {}, feedback: {}, restEndAt: 0 };
+      RECORD.trainingSession[key] = session;
+      RECORD.trainDone[key] = false;
+      renderTrainingPage();
+      renderWeekStrip();
+      saveData();
+    }
+    function completeCurrentSet() {
+      const data = WEEK_DATA[getSelectedDay()];
+      if (!data || data.train.rest) return;
+      const exercises = data.train.exercises || [];
+      if (!exercises.length) return;
+      const session = getTrainingSession();
+      const idx = Math.max(0, Math.min(session.exerciseIdx || 0, exercises.length - 1));
+      const ex = exercises[idx];
+      if (!session.completedSets[idx]) session.completedSets[idx] = [];
+      session.completedSets[idx].push({ reps: ex.reps || '-', at: Date.now() });
+      const doneCount = session.completedSets[idx].length;
+      const targetSets = getExerciseSetCount(ex);
+      session.setIdx = doneCount;
+      if (doneCount < targetSets) {
+        startRest(ex.rest);
+      } else {
+        const nextIdx = computeNextExerciseIdx(exercises, session);
+        if (nextIdx === -1) {
+          session.status = 'done';
+          session.restEndAt = 0;
+          RECORD.trainDone[getDateKey()] = true;
+        } else {
+          session.exerciseIdx = nextIdx;
+          session.setIdx = (session.completedSets[nextIdx] || []).length;
+          const prevRest = parseInt(ex.rest, 10) || 0;
+          startRest(prevRest);
+        }
+      }
+      renderTrainingPage();
+      renderWeekStrip();
+      saveData();
+    }
+    function companionCoachSay(text) {
+      const c = getCompanionState();
+      c.lastCoach = text;
+    }
+    function applyCompanionMode() {
+      const c = getCompanionState();
+      document.body.classList.toggle('companion-on', c.mode === 'coach');
+      const toggleBtn = document.getElementById('companion-toggle-btn');
+      const modeStatus = document.getElementById('companion-mode-status');
+      if (toggleBtn) {
+        toggleBtn.classList.toggle('on', c.mode === 'coach');
+        toggleBtn.textContent = c.mode === 'coach' ? '关闭' : '开启';
+      }
+      if (modeStatus) modeStatus.textContent = '当前：' + (c.mode === 'coach' ? '教练陪伴模式' : '关闭');
+    }
+    function updateWearableMock() {
+      const c = getCompanionState();
+      const dayData = WEEK_DATA[getSelectedDay()];
+      const session = getTrainingSession();
+      const base = (session.status === 'active') ? 124 : (session.status === 'rest' ? 102 : 86);
+      c.wearable.hr = Math.max(70, Math.min(170, base + Math.floor(Math.random() * 9) - 4));
+      if (session.status === 'active' && !dayData.train.rest) c.wearable.load = '中';
+      else if (session.status === 'rest') c.wearable.load = '恢复';
+      else c.wearable.load = '低';
+      const conn = document.getElementById('wearable-conn');
+      const hr = document.getElementById('wearable-hr');
+      const load = document.getElementById('wearable-load');
+      if (conn) conn.textContent = c.wearable.connected ? '已连接' : '未连接';
+      if (hr) hr.textContent = c.wearable.hr + ' bpm';
+      if (load) load.textContent = c.wearable.load;
+    }
+    function triggerVoiceCommand(cmd) {
+      const c = getCompanionState();
+      const map = {
+        start: '开始训练',
+        done: '完成本组',
+        rest: '休息一下',
+        heavy: '太重了',
+        light: '太轻了',
+        end: '结束训练'
+      };
+      c.lastHeard = map[cmd] || cmd;
+      if (cmd === 'start') {
+        startTrainingSessionForSelectedDate();
+        companionCoachSay('收到，开始训练。保持动作标准。');
+      } else if (cmd === 'done') {
+        completeCurrentSet();
+        companionCoachSay('本组已记录，节奏很好。');
+      } else if (cmd === 'rest') {
+        startRest(60);
+        renderTrainingPage();
+        companionCoachSay('已开始 60 秒休息，注意呼吸。');
+      } else if (cmd === 'heavy') {
+        const s = getTrainingSession();
+        s.feedback[s.exerciseIdx || 0] = '太重';
+        renderTrainingPage();
+        companionCoachSay('收到。下一组建议降重 2.5-5kg。');
+      } else if (cmd === 'light') {
+        const s = getTrainingSession();
+        s.feedback[s.exerciseIdx || 0] = '太轻';
+        renderTrainingPage();
+        companionCoachSay('收到。下一组可以小幅加重。');
+      } else if (cmd === 'end') {
+        const s = getTrainingSession();
+        s.status = 'done';
+        s.restEndAt = 0;
+        RECORD.trainDone[getDateKey()] = true;
+        renderTrainingPage();
+        renderWeekStrip();
+        companionCoachSay('今日训练结束，记得拉伸放松。');
+      }
+      renderCompanionPanel();
+      saveData();
+    }
+    function renderCompanionPanel() {
+      const c = getCompanionState();
+      applyCompanionMode();
+      const heard = document.getElementById('companion-last-heard');
+      const coach = document.getElementById('companion-last-coach');
+      if (heard) heard.textContent = c.lastHeard;
+      if (coach) coach.textContent = c.lastCoach;
+      updateWearableMock();
+    }
+    function renderActivityLayerPreview() {
+      const wrap = document.getElementById('activity-layer-preview');
+      if (!wrap) return;
+      const items = ACTIVITY_PREVIEW_ITEMS.filter(x => activityPreviewLayer === 'all' || x.layer === activityPreviewLayer);
+      if (!items.length) {
+        wrap.innerHTML = '<div class="activity-preview-empty">当前筛选下暂无样例。</div>';
+        return;
+      }
+      wrap.innerHTML = items.map(item => {
+        const layerName = item.layer === 'generic' ? '通用层' : (item.layer === 'template' ? '增强模板层' : '自由记录层');
+        const metricHtml = (item.metrics || []).map(m =>
+          '<div class="activity-metric"><div class="k">' + m.k + '</div><div class="v">' + m.v + '</div></div>'
+        ).join('');
+        return '<div class="activity-card">' +
+          '<div class="activity-card-head">' +
+          '<div class="activity-card-name">' + item.icon + ' ' + item.name + '</div>' +
+          '<div class="activity-badges">' +
+          '<span class="activity-badge layer-' + item.layer + '">' + layerName + '</span>' +
+          '<span class="activity-badge">' + item.status + '</span>' +
+          '</div></div>' +
+          '<div class="activity-metrics">' + metricHtml + '</div>' +
+          '<div class="activity-note">' + item.note + '</div>' +
+          '</div>';
+      }).join('');
+    }
+    function renderTrainingPage() {
+      const day = getSelectedDay();
+      const dayData = WEEK_DATA[day];
+      const train = dayData.train;
+      const title = document.getElementById('training-title');
+      const subtitle = document.getElementById('training-subtitle');
+      const current = document.getElementById('training-current');
+      const list = document.getElementById('training-exercise-list');
+      if (!title || !subtitle || !current || !list) return;
+
+      if (train.rest) {
+        title.textContent = '今日恢复';
+        subtitle.textContent = DAY_LABELS[day] + ' · ' + train.hint;
+        current.innerHTML = '<div class="training-empty">今天是休息日，建议完成拉伸与补水。</div>';
+        list.innerHTML = '<div class="training-empty">休息日无训练动作</div>';
+        renderCompanionPanel();
+        return;
+      }
+
+      const exercises = train.exercises || [];
+      const session = getTrainingSession();
+      if (session.exerciseIdx >= exercises.length) session.exerciseIdx = Math.max(0, exercises.length - 1);
+      const activeIdx = Math.max(0, Math.min(session.exerciseIdx || 0, Math.max(0, exercises.length - 1)));
+
+      if (!exercises.length) {
+        title.textContent = '今日训练';
+        subtitle.textContent = '暂无训练动作';
+        current.innerHTML = '<div class="training-empty">请先在计划页添加训练动作</div>';
+        list.innerHTML = '<div class="training-empty">暂无动作</div>';
+        renderCompanionPanel();
+        return;
+      }
+
+      if (session.status === 'idle') {
+        title.textContent = '今日训练';
+        subtitle.textContent = DAY_LABELS[day] + ' · ' + train.focus;
+        current.innerHTML = '<div class="training-empty">训练尚未开始</div><button class="btn btn-primary" id="training-start-btn-page">开始训练</button>';
+      } else if (session.status === 'done') {
+        title.textContent = '训练完成';
+        subtitle.textContent = DAY_LABELS[day] + ' · ' + train.focus + ' · 已完成';
+        current.innerHTML = '<div class="exercise-name">今天训练已完成</div><div class="training-status">做得很棒，建议拉伸放松 5-10 分钟。</div><div class="quick-actions"><button class="btn btn-secondary" id="training-restart-btn-page">重新开始</button></div>';
+      } else {
+        const active = exercises[activeIdx];
+        const doneCount = (session.completedSets[activeIdx] || []).length;
+        const targetSets = getExerciseSetCount(active);
+        const setIndexDisplay = Math.min(doneCount + 1, targetSets);
+        const chips = Array.from({ length: targetSets }).map((_, i) => {
+          const done = i < doneCount;
+          return '<span class="set-chip' + (done ? '' : ' pending') + '">' + (done ? ('第' + (i + 1) + '组 ✓') : ('第' + (i + 1) + '组')) + '</span>';
+        }).join('');
+        const remain = session.status === 'rest' && session.restEndAt ? Math.max(0, session.restEndAt - Date.now()) : 0;
+        const timerText = session.status === 'rest' ? formatRemain(remain) : '--:--';
+        const statusText = session.status === 'rest' ? '组间休息中' : '进行中';
+        const feedback = session.feedback[activeIdx] ? (' · 反馈：' + session.feedback[activeIdx]) : '';
+
+        title.textContent = '训练进行中';
+        subtitle.textContent = DAY_LABELS[day] + ' · ' + train.focus + ' · 第 ' + (activeIdx + 1) + ' 个动作';
+        current.innerHTML =
+          '<div class="exercise-name">' + active.name + '</div>' +
+          '<div class="progress">第 ' + setIndexDisplay + ' 组 / 共 ' + targetSets + ' 组</div>' +
+          '<div class="target">目标：' + (active.reps || '-') + ' · 组间休息 ' + (active.rest || 0) + ' 秒</div>' +
+          '<div class="sets-done">' + chips + '</div>' +
+          '<div class="rest-timer">' + timerText + '</div>' +
+          '<div class="training-status">' + statusText + feedback + '</div>' +
+          '<div class="quick-actions">' +
+          '<button class="btn btn-primary" id="training-complete-set-btn">完成本组</button>' +
+          '<button class="btn btn-secondary" id="training-feedback-heavy-btn">太重</button>' +
+          '<button class="btn btn-secondary" id="training-feedback-light-btn">太轻</button>' +
+          '<button class="btn btn-secondary" id="training-rest-btn">休息</button>' +
+          '<button class="btn btn-secondary" id="training-end-btn">结束训练</button>' +
+          '</div>';
+      }
+
+      list.innerHTML = exercises.map((ex, i) => {
+        const targetSets = getExerciseSetCount(ex);
+        const done = (session.completedSets[i] || []).length;
+        let state = done >= targetSets ? '已完成' : (i === activeIdx && session.status !== 'idle' && session.status !== 'done' ? '进行中' : '待开始');
+        const rowCls = 'exercise-row' + (i === activeIdx && session.status !== 'done' ? ' active' : '') + (done >= targetSets ? ' done' : '');
+        return '<div class="' + rowCls + '" data-training-ex="' + i + '">' +
+          '<span class="num">' + (i + 1) + '</span>' +
+          '<span class="name">' + ex.name + '</span>' +
+          '<span class="sets">' + done + '/' + targetSets + ' 组 · ' + state + '</span></div>';
+      }).join('');
+
+      current.querySelector('#training-start-btn-page')?.addEventListener('click', () => {
+        startTrainingSessionForSelectedDate();
+      });
+      current.querySelector('#training-restart-btn-page')?.addEventListener('click', () => {
+        startTrainingSessionForSelectedDate();
+      });
+      current.querySelector('#training-complete-set-btn')?.addEventListener('click', () => {
+        completeCurrentSet();
+      });
+      current.querySelector('#training-feedback-heavy-btn')?.addEventListener('click', () => {
+        const s = getTrainingSession();
+        s.feedback[activeIdx] = '太重';
+        renderTrainingPage();
+        saveData();
+      });
+      current.querySelector('#training-feedback-light-btn')?.addEventListener('click', () => {
+        const s = getTrainingSession();
+        s.feedback[activeIdx] = '太轻';
+        renderTrainingPage();
+        saveData();
+      });
+      current.querySelector('#training-rest-btn')?.addEventListener('click', () => {
+        startRest(60);
+        renderTrainingPage();
+        saveData();
+      });
+      current.querySelector('#training-end-btn')?.addEventListener('click', () => {
+        const s = getTrainingSession();
+        s.status = 'done';
+        s.restEndAt = 0;
+        RECORD.trainDone[getDateKey()] = true;
+        renderTrainingPage();
+        renderWeekStrip();
+        saveData();
+      });
+      list.querySelectorAll('[data-training-ex]').forEach(row => {
+        row.addEventListener('click', () => {
+          const idx = parseInt(row.dataset.trainingEx, 10);
+          const s = getTrainingSession();
+          s.exerciseIdx = idx;
+          s.setIdx = (s.completedSets[idx] || []).length;
+          if (s.status === 'idle') s.status = 'active';
+          if (s.status === 'done') s.status = 'active';
+          s.restEndAt = 0;
+          renderTrainingPage();
+          saveData();
+        });
+      });
+      renderCompanionPanel();
+      renderActivityLayerPreview();
+    }
+    function startTrainingTick() {
+      if (trainingTickTimer) clearInterval(trainingTickTimer);
+      trainingTickTimer = setInterval(() => {
+        const session = getTrainingSession();
+        updateWearableMock();
+        if (session.status === 'rest' && session.restEndAt) {
+          if (Date.now() >= session.restEndAt) {
+            session.status = 'active';
+            session.restEndAt = 0;
+            renderTrainingPage();
+            saveData();
+          } else {
+            renderTrainingPage();
+          }
+        }
+      }, 1000);
+    }
+
+    let planCardExpanded = false;
+    let expandedType = 'train';
+
+    function expandPlanCard(type) {
+      planCardExpanded = true;
+      expandedType = type;
+      const selectedDay = getSelectedDay();
+      const data = WEEK_DATA[selectedDay];
+      const dayName = DAY_LABELS[selectedDay];
+      const row = document.getElementById('plan-row');
+
+      row.classList.remove('train-expanded', 'diet-expanded');
+      document.querySelectorAll('.expand-tab').forEach(x => {
+        x.classList.remove('active');
+        if ((type === 'train' || type === 'rest') && x.dataset.expand === 'train') x.classList.add('active');
+        if (type === 'diet' && x.dataset.expand === 'diet') x.classList.add('active');
+      });
+      if (type === 'rest' || type === 'train') {
+        row.classList.add('train-expanded');
+        document.getElementById('train-overview').style.display = 'none';
+        document.getElementById('train-expanded').style.display = 'block';
+        document.getElementById('train-expanded-subtitle').textContent = type === 'rest' ? dayName + ' · 休息' : dayName + ' · ' + data.train.focus + ' · ' + data.train.count + ' 个动作';
+        document.getElementById('train-time-row').style.display = type === 'rest' ? 'none' : 'flex';
+        const activityPanel = document.getElementById('train-activity-panel');
+        if (activityPanel) activityPanel.style.display = type === 'rest' ? 'none' : 'block';
+        document.getElementById('train-start-btn').style.display = type === 'rest' ? 'none' : 'block';
+        if (type === 'rest') {
+          document.getElementById('train-exercises').innerHTML =
+            '<p style="color:#515154;font-size:15px;line-height:1.8;">' + data.train.hint + '</p>' +
+            '<ul style="margin:12px 0 0 20px;color:#515154;font-size:15px;line-height:2;"><li>轻度拉伸 10–15 分钟</li><li>补充水分</li><li>充足睡眠</li></ul>' +
+            '<button class="btn btn-secondary record-stretch-btn" style="width:100%;margin-top:12px;">记录拉伸</button>';
+        } else {
+          document.getElementById('train-time-input').value = data.train.time || '';
+          const header = '<div class="detail-exercise-header">' +
+            '<span class="col-num">#</span>' +
+            '<span class="col-name">动作名</span>' +
+            '<span class="col-sets">组</span>' +
+            '<span class="col-reps">次</span>' +
+            '<span class="col-rest">休息(s)</span>' +
+            '<span style="width:24px"></span></div>';
+          const exs = (data.train.exercises || []).map((e, i) =>
+            '<div class="detail-exercise" data-idx="' + i + '">' +
+            '<span class="num">' + (i+1) + '</span>' +
+            '<input type="text" class="name-input" value="' + (e.name || '').replace(/"/g, '&quot;') + '" placeholder="动作名">' +
+            '<input type="text" class="sets-input" value="' + (e.sets || '') + '" placeholder="—">' +
+            '<input type="text" class="reps-input" value="' + (e.reps || '').replace(/"/g, '&quot;') + '" placeholder="—">' +
+            '<input type="text" class="rest-input" value="' + (e.rest ? String(e.rest) : '') + '" placeholder="—">' +
+            '<span class="del-btn" title="删除">✕</span></div>'
+          ).join('');
+          document.getElementById('train-exercises').innerHTML = header + (exs || '<p style="color:#86868b;padding:12px;">暂无动作</p>');
+          bindDetailExerciseEvents();
+        }
+      } else {
+        row.classList.add('diet-expanded');
+        document.getElementById('diet-overview').style.display = 'none';
+        document.getElementById('diet-expanded').style.display = 'block';
+        document.getElementById('diet-expanded-subtitle').textContent = '今日目标：约 ' + data.diet.total + ' kcal';
+        const key = getDateKey();
+        const mealDone = RECORD.mealDone[key] || [];
+        document.getElementById('diet-expanded-content').innerHTML = data.diet.meals.map((m, i) =>
+          '<div class="diet-detail-item" data-meal-idx="' + i + '">' +
+          '<div class="diet-detail-icon">🍽️</div>' +
+          '<div class="diet-detail-body">' +
+          '<input type="text" class="diet-detail-meal-input" value="' + (m.n || '').replace(/"/g, '&quot;') + '" placeholder="如：第1餐、早餐、早午餐…">' +
+          '<div class="diet-detail-time-row"><span class="diet-detail-cal">时间</span><input type="text" class="diet-time-input" value="' + (m.time || '') + '" placeholder="如 07:30">' +
+          '<button type="button" class="meal-done-btn' + (mealDone[i] ? ' done' : '') + '" data-idx="' + i + '">' + (mealDone[i] ? '✓ 已吃' : '标记完成') + '</button>' +
+          '<span class="diet-del-btn" data-idx="' + i + '" title="删除">✕</span></div>' +
+          '<textarea class="diet-detail-desc-input" placeholder="例如：燕麦 50g + 鸡蛋 2 个 + 牛奶 200ml">' + (m.desc || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' +
+          '<div class="diet-detail-cal-row"><span class="diet-detail-cal">约</span><input type="number" class="diet-cal-input" value="' + m.c + '" placeholder="kcal"> kcal</div>' +
+          '</div></div>'
+        ).join('');
+        bindDetailDietEvents();
+      }
+    }
+
+    function collapsePlanCard() {
+      const row = document.getElementById('plan-row');
+      row.classList.remove('train-expanded', 'diet-expanded');
+      document.getElementById('train-overview').style.display = '';
+      document.getElementById('train-expanded').style.display = 'none';
+      document.getElementById('diet-overview').style.display = '';
+      document.getElementById('diet-expanded').style.display = 'none';
+      planCardExpanded = false;
+      renderPlanContent();
+    }
+
+    function bindDetailDietEvents() {
+      document.querySelectorAll('#diet-expanded-content .diet-detail-item').forEach(item => {
+        const idx = parseInt(item.dataset.mealIdx, 10);
+        const data = WEEK_DATA[getSelectedDay()];
+        if (!data.diet.meals || !data.diet.meals[idx]) return;
+        const m = data.diet.meals[idx];
+        const nameInput = item.querySelector('.diet-detail-meal-input');
+        const timeInput = item.querySelector('.diet-time-input');
+        const descInput = item.querySelector('.diet-detail-desc-input');
+        const calInput = item.querySelector('.diet-cal-input');
+        nameInput?.addEventListener('blur', () => { m.n = nameInput.value.trim() || '第' + (idx + 1) + '餐'; saveData(); });
+        timeInput?.addEventListener('blur', () => { m.time = timeInput.value.trim() || null; renderDayTimeline(); saveData(); });
+        descInput?.addEventListener('blur', () => {
+          m.desc = descInput.value.trim();
+          const total = data.diet.meals.reduce((s, x) => s + (parseInt(x.c, 10) || 0), 0);
+          data.diet.total = total;
+          document.getElementById('diet-expanded-subtitle').textContent = '今日目标：约 ' + total + ' kcal';
+          saveData();
+        });
+        calInput?.addEventListener('blur', () => {
+          const v = parseInt(calInput.value, 10);
+          m.c = isNaN(v) ? 0 : v;
+          const total = data.diet.meals.reduce((s, x) => s + (parseInt(x.c, 10) || 0), 0);
+          data.diet.total = total;
+          document.getElementById('diet-expanded-subtitle').textContent = '今日目标：约 ' + total + ' kcal';
+          renderDayTimeline();
+          saveData();
+        });
+        item.querySelector('.meal-done-btn')?.addEventListener('click', () => {
+          const key = getDateKey();
+          if (!RECORD.mealDone[key]) RECORD.mealDone[key] = [];
+          RECORD.mealDone[key][idx] = !RECORD.mealDone[key][idx];
+          const meals = data.diet.meals;
+          RECORD.consumedCal[key] = meals.reduce((s, x, i) => s + (RECORD.mealDone[key][i] ? (x.c || 0) : 0), 0);
+          RECORD.consumedP[key] = meals.reduce((s, x, i) => s + (RECORD.mealDone[key][i] ? (x.p || 0) : 0), 0);
+          RECORD.consumedC[key] = meals.reduce((s, x, i) => s + (RECORD.mealDone[key][i] ? (x.carbs || 0) : 0), 0);
+          RECORD.consumedF[key] = meals.reduce((s, x, i) => s + (RECORD.mealDone[key][i] ? (x.f || 0) : 0), 0);
+          renderWeekStrip();
+          renderCalProgress();
+          expandPlanCard('diet');
+          saveData();
+        });
+        item.querySelector('.diet-del-btn')?.addEventListener('click', () => {
+          if (data.diet.meals.length <= 1) return;
+          const key = getDateKey();
+          const meals = data.diet.meals;
+          if (RECORD.mealDone[key]) RECORD.mealDone[key].splice(idx, 1);
+          meals.splice(idx, 1);
+          RECORD.consumedCal[key] = meals.reduce((s, x, i) => s + (RECORD.mealDone[key] && RECORD.mealDone[key][i] ? (x.c || 0) : 0), 0);
+          RECORD.consumedP[key] = meals.reduce((s, x, i) => s + (RECORD.mealDone[key] && RECORD.mealDone[key][i] ? (x.p || 0) : 0), 0);
+          RECORD.consumedC[key] = meals.reduce((s, x, i) => s + (RECORD.mealDone[key] && RECORD.mealDone[key][i] ? (x.carbs || 0) : 0), 0);
+          RECORD.consumedF[key] = meals.reduce((s, x, i) => s + (RECORD.mealDone[key] && RECORD.mealDone[key][i] ? (x.f || 0) : 0), 0);
+          renderWeekStrip();
+          renderCalProgress();
+          expandPlanCard('diet');
+          saveData();
+        });
+      });
+    }
+
+    function bindDetailExerciseEvents() {
+      document.querySelectorAll('#train-exercises .detail-exercise').forEach(row => {
+        const idx = parseInt(row.dataset.idx, 10);
+        row.querySelectorAll('input').forEach(inp => {
+          inp.addEventListener('blur', () => {
+            const data = WEEK_DATA[getSelectedDay()];
+            if (data.train.exercises && data.train.exercises[idx]) {
+              const e = data.train.exercises[idx];
+              e.name = row.querySelector('.name-input').value;
+              e.sets = row.querySelector('.sets-input').value;
+              e.reps = row.querySelector('.reps-input').value;
+              const r = row.querySelector('.rest-input').value;
+              e.rest = r ? parseInt(r, 10) : 0;
+              saveData();
+            }
+          });
+        });
+        row.querySelector('.del-btn')?.addEventListener('click', () => {
+          const data = WEEK_DATA[getSelectedDay()];
+          if (data.train.exercises) data.train.exercises.splice(idx, 1);
+          expandPlanCard('train');
+          saveData();
+        });
+      });
+    }
+
+    document.getElementById('train-back').addEventListener('click', (e) => { e.stopPropagation(); collapsePlanCard(); });
+    document.getElementById('diet-back').addEventListener('click', (e) => { e.stopPropagation(); collapsePlanCard(); });
+
+    document.querySelectorAll('#expand-tabs .expand-tab, #expand-tabs-diet .expand-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const t = tab.dataset.expand;
+        const data = WEEK_DATA[getSelectedDay()];
+        if (t === 'train') expandPlanCard(data.train.rest ? 'rest' : 'train');
+        else expandPlanCard('diet');
+      });
+    });
+    document.getElementById('train-expanded')?.addEventListener('click', (e) => {
+      if (e.target.classList.contains('record-stretch-btn')) {
+        const key = getDateKey();
+        RECORD.restDone[key] = true;
+        renderPlanContent();
+        saveData();
+        e.target.textContent = '✓ 已记录';
+      }
+    });
+    document.getElementById('train-start-btn')?.addEventListener('click', () => {
+      startTrainingSessionForSelectedDate();
+      document.querySelector('.tab[data-page="training"]')?.click();
+    });
+    document.getElementById('train-time-input')?.addEventListener('blur', () => {
+      const data = WEEK_DATA[getSelectedDay()];
+      const v = document.getElementById('train-time-input').value.trim();
+      data.train.time = v || null;
+      renderDayTimeline();
+      saveData();
+    });
+    document.getElementById('diet-add-meal')?.addEventListener('click', () => {
+      const data = WEEK_DATA[getSelectedDay()];
+      data.diet.meals.push({ n: '第' + (data.diet.meals.length + 1) + '餐', c: 500, p: 30, carbs: 55, f: 18, time: '12:00', desc: '' });
+      data.diet.total = data.diet.meals.reduce((s, x) => s + (x.c || 0), 0);
+      expandPlanCard('diet');
+      saveData();
+    });
+    document.getElementById('companion-toggle-btn')?.addEventListener('click', () => {
+      const c = getCompanionState();
+      c.mode = c.mode === 'coach' ? 'normal' : 'coach';
+      c.lastCoach = c.mode === 'coach' ? '陪伴模式已开启，请继续当前训练。' : '陪伴模式已关闭。';
+      renderCompanionPanel();
+      saveData();
+    });
+    document.querySelectorAll('#voice-commands [data-voice-cmd]').forEach(btn => {
+      btn.addEventListener('click', () => triggerVoiceCommand(btn.dataset.voiceCmd));
+    });
+    document.querySelectorAll('#activity-layer-tabs [data-layer]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activityPreviewLayer = btn.dataset.layer || 'all';
+        document.querySelectorAll('#activity-layer-tabs .activity-layer-tab').forEach(x => x.classList.remove('active'));
+        btn.classList.add('active');
+        renderActivityLayerPreview();
+      });
+    });
+
+    // 点击 train-card 任意处展开；点击 diet-card 任意处展开饮食
+    document.getElementById('train-card').addEventListener('click', (e) => {
+      if (document.getElementById('train-overview').style.display === 'none') return;
+      if (e.target.closest('.plan-card-back')) return;
+      const data = WEEK_DATA[getSelectedDay()];
+      expandPlanCard(data.train.rest ? 'rest' : 'train');
+    });
+    document.getElementById('diet-card').addEventListener('click', (e) => {
+      if (document.getElementById('diet-overview').style.display === 'none') return;
+      if (e.target.closest('.plan-card-back')) return;
+      expandPlanCard('diet');
+    });
+
+    // 周/月视图切换
+    document.getElementById('expand-btn').addEventListener('click', () => {
+      showMonthView = !showMonthView;
+      const hide = showMonthView ? 'none' : 'block';
+      document.getElementById('week-strip-wrap').style.display = hide;
+      const dt = document.getElementById('day-timeline');
+      if (dt) dt.style.display = hide;
+      document.getElementById('month-view').classList.toggle('show', showMonthView);
+      document.getElementById('expand-btn').textContent = showMonthView ? '📆' : '📅';
+      if (showMonthView) {
+        selectedDate = new Date();
+        monthViewDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+        renderWeekStrip();
+        renderMonthGrid();
+        renderPlanContent();
+      }
+    });
+    document.getElementById('month-prev').addEventListener('click', () => {
+      monthViewDate.setMonth(monthViewDate.getMonth() - 1);
+      renderMonthGrid();
+    });
+    document.getElementById('month-next').addEventListener('click', () => {
+      monthViewDate.setMonth(monthViewDate.getMonth() + 1);
+      renderMonthGrid();
+    });
+
+    // 初始化
+    (function init() {
+      loadData();
+      monthViewDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+      renderWeekStrip();
+      renderMonthGrid();
+      renderPlanContent();
+      startTrainingTick();
+      renderCompanionPanel();
+      renderActivityLayerPreview();
+    })();
+
+    // Tab 切换
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('page-' + tab.dataset.page).classList.add('active');
+        if (tab.dataset.page === 'training') renderTrainingPage();
+      });
+    });
+
+  </script>
+</body>
+</html>

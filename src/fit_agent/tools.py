@@ -61,8 +61,9 @@ def mark_task_done(reason: str = "") -> str:
 
 参数：
 - action: 动作类型，如 navigate / show_message
-- module: 目标模块（home/plans/training/assessment/workspace），仅 action=navigate 时需要
-- sub_state: 可选子页（today/session/blackboard 等）。也可放在 payload.sub_state（推荐）
+- module: 目标页面（coach/chat/settings）。其中 coach 为工作台页面组
+- sub_state: 可选子页面状态（如 overview/training_detail/nutrition_detail/session/blackboard）
+- payload.module_tab: 当 module=coach 时可选，指定工作台内 tab（home/plans/training/assessment/workspace）
 - payload: 可选的附加信息（如提示文本）
 """
 )

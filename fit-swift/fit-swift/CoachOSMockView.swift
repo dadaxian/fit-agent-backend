@@ -56,6 +56,7 @@ private final class CoachOSMockViewModel: ObservableObject {
     @Published var selectedModule: CoachOSModule = .home
     @Published var coachLine: String = "正在连接教练..."
     @Published var coachBubble: String = "你好，我在。"
+    @Published var chatMessages: [(role: String, content: String)] = []
     @Published var inputText: String = ""
     @Published var isLoading = false
     @Published var isAgentThinking = false
@@ -64,6 +65,7 @@ private final class CoachOSMockViewModel: ObservableObject {
     @Published var currentSubState: String = "overview"
     @Published var blackboardMarkdown: String = ""
     @Published var blockedModules: Set<CoachOSModule> = []
+    @Published var externalNavigationTarget: String? = nil
 
     private var apiClient: APIClient?
     private var threadId: String?
@@ -116,7 +118,7 @@ private final class CoachOSMockViewModel: ObservableObject {
 
     func openPlanItem(title: String) {
         // 用户点击页面元素时走“传统逻辑”：本地直接跳转，不依赖 agent 决策
-        navigateLocal(to: .plans, subState: "today")
+        navigateLocal(to: .plans, subState: "training_detail")
     }
 
     func startTraining() {
@@ -292,6 +294,28 @@ private final class CoachOSMockViewModel: ObservableObject {
         return nil
     }
 
+    private func extractChatMessages(from messages: [[String: Any]]) -> [(role: String, content: String)] {
+        var result: [(role: String, content: String)] = []
+        for msg in messages {
+            let role = msg["type"] as? String ?? ""
+            guard role == "human" || role == "ai" else { continue }
+            var content = ""
+            if let c = msg["content"] as? String {
+                content = c.trimmingCharacters(in: .whitespacesAndNewlines)
+            } else if let blocks = msg["content"] as? [[String: Any]] {
+                let parts = blocks.compactMap { block -> String? in
+                    guard (block["type"] as? String) == "text" else { return nil }
+                    return (block["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                content = parts.joined(separator: " ")
+            }
+            if !content.isEmpty {
+                result.append((role: role, content: content))
+            }
+        }
+        return result
+    }
+
     private func extractUICommands(from messages: [[String: Any]]) -> [[String: Any]] {
         var commands: [[String: Any]] = []
         let lastHumanIndex = messages.lastIndex { ($0["type"] as? String) == "human" } ?? -1
@@ -324,17 +348,48 @@ private final class CoachOSMockViewModel: ObservableObject {
         switch type {
         case "navigate":
             guard let moduleString else { return }
-            let target = CoachOSModule.fromServerModule(moduleString)
+            let moduleKey = moduleString.lowercased()
+
+            if ["chat", "conversation", "dialog"].contains(moduleKey) {
+                externalNavigationTarget = "chat"
+                return
+            }
+            if ["settings", "profile", "me", "mine"].contains(moduleKey) {
+                externalNavigationTarget = "settings"
+                return
+            }
+
+            let target: CoachOSModule
+            if ["coach", "workbench", "coachos"].contains(moduleKey) {
+                let tab = (payload["module_tab"] as? String) ?? "home"
+                target = CoachOSModule.fromServerModule(tab)
+            } else {
+                target = CoachOSModule.fromServerModule(moduleString)
+            }
+
             if blockedModules.contains(target) {
                 updateCoachReply("当前阶段暂不能进入\(target.title)模块。")
                 return
             }
+
+            var resolvedSubState = subState
+            if target == .plans {
+                if ["today", "plan_today", "training_today"].contains(resolvedSubState) {
+                    resolvedSubState = "training_detail"
+                } else if ["nutrition", "diet", "meal_plan", "diet_detail"].contains(resolvedSubState) {
+                    resolvedSubState = "nutrition_detail"
+                }
+                if ["nutrition", "diet"].contains(moduleKey), resolvedSubState == "overview" {
+                    resolvedSubState = "nutrition_detail"
+                }
+            }
+
             selectedModule = target
-            currentSubState = subState
-            if target == .workspace, subState == "blackboard" {
+            currentSubState = resolvedSubState
+            if target == .workspace, resolvedSubState == "blackboard" {
                 requestBlackboard()
             } else {
-                requestModuleData(for: target, subState: subState)
+                requestModuleData(for: target, subState: resolvedSubState)
             }
         case "show_message":
             if let text = payload["text"] as? String {
@@ -401,6 +456,15 @@ private final class CoachOSMockViewModel: ObservableObject {
 }
 
 struct CoachOSMockView: View {
+    private enum PlanExpandedKind {
+        case training
+        case nutrition
+    }
+
+    var onOpenSettings: (() -> Void)? = nil
+    var onOpenChat: (() -> Void)? = nil
+    var showsCloseButton: Bool = true
+
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthService
     @StateObject private var viewModel = CoachOSMockViewModel()
@@ -411,6 +475,73 @@ struct CoachOSMockView: View {
     @State private var userSpin = false
     @State private var isStartingRecording = false
     @State private var spin = false
+    @State private var showErrorAlert = false
+    @State private var errorAlertMessage = ""
+    @State private var expandedPlanKind: PlanExpandedKind?
+    @State private var editableExercises: [ExercisePreview] = [
+        .init(
+            name: "杠铃深蹲",
+            sets: 4,
+            reps: "8-10",
+            weightKg: "60",
+            note: "",
+            perSetTiming: true,
+            difficulty: "正常",
+            setRows: [
+                .init(setNo: 1, weightKg: "60", reps: "10", done: false),
+                .init(setNo: 2, weightKg: "60", reps: "9", done: false),
+                .init(setNo: 3, weightKg: "60", reps: "8", done: false),
+                .init(setNo: 4, weightKg: "60", reps: "8", done: false),
+            ],
+            layer: .traditional
+        ),
+        .init(
+            name: "🏃 跑步（轻松跑）",
+            sets: 1,
+            reps: "8.2 km",
+            weightKg: "0",
+            note: "配速 5'45\"",
+            perSetTiming: false,
+            difficulty: "正常",
+            setRows: [],
+            layer: .template
+        ),
+        .init(
+            name: "🏀 篮球对抗",
+            sets: 1,
+            reps: "45 min",
+            weightKg: "0",
+            note: "RPE 7/10",
+            perSetTiming: false,
+            difficulty: "正常",
+            setRows: [],
+            layer: .free
+        ),
+        .init(
+            name: "腿举",
+            sets: 3,
+            reps: "12",
+            weightKg: "140",
+            note: "",
+            perSetTiming: false,
+            difficulty: "正常",
+            setRows: [
+                .init(setNo: 1, weightKg: "140", reps: "12", done: false),
+                .init(setNo: 2, weightKg: "140", reps: "12", done: false),
+                .init(setNo: 3, weightKg: "140", reps: "12", done: false),
+            ],
+            layer: .traditional
+        ),
+    ]
+    @State private var nutritionMeals: [NutritionMealPreview] = [
+        .init(name: "第1餐", time: "07:30", kcal: 520, macros: "P30/C60/F18", desc: "燕麦 50g + 鸡蛋 2 个 + 牛奶 200ml + 香蕉"),
+        .init(name: "第2餐", time: "12:00", kcal: 750, macros: "P45/C85/F24", desc: "米饭 180g + 牛肉 150g + 青椒炒肉 + 紫菜蛋花汤"),
+        .init(name: "第3餐", time: "18:30", kcal: 680, macros: "P40/C75/F22", desc: "玉米 1 根 + 三文鱼 120g + 蒜蓉西兰花 + 菌菇汤"),
+    ]
+    @State private var activityLogs: [ActivityLogPreview] = [
+        .init(icon: "🏃", name: "慢跑（轻松）", detail: "30 分钟 · 配速 5'50\"/km · 平均心率 148"),
+        .init(icon: "🏀", name: "篮球对抗", detail: "45 分钟 · RPE 7/10 · 热量约 420 kcal"),
+    ]
     @AppStorage("apiBaseURL") private var apiBaseURL = "http://139.196.181.42:8000"
 
     var body: some View {
@@ -423,21 +554,7 @@ struct CoachOSMockView: View {
 
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text(viewModel.uiState?.title ?? "Agent 页面系统")
-                                .font(.headline)
-
-                            Text("当前模块：\(viewModel.selectedModule.title)")
-                                .font(.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(.thinMaterial, in: Capsule())
                             moduleContent
-
-                            Button(viewModel.quickActionTitle()) {
-                                viewModel.sendVoiceMockInput()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.orange)
 
                             if let err = viewModel.error {
                                 Text(err)
@@ -446,14 +563,14 @@ struct CoachOSMockView: View {
                             }
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, 14)
+                        .padding(.top, viewModel.selectedModule == .training ? 0 : 14)
                         .padding(.bottom, 170)
                     }
                 }
 
                 floatingCoach
                 floatingUser
-                floatingCloseButton
+                floatingTopControls
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .navigationBarHidden(true)
@@ -473,6 +590,41 @@ struct CoachOSMockView: View {
                 if !newValue {
                     isStartingRecording = false
                 }
+            }
+            .onChange(of: viewModel.error) { newValue in
+                guard let newValue, !newValue.isEmpty else { return }
+                errorAlertMessage = newValue
+                showErrorAlert = true
+            }
+            .onChange(of: viewModel.selectedModule) { _ in
+                expandedPlanKind = nil
+            }
+            .onChange(of: viewModel.externalNavigationTarget) { target in
+                guard let target else { return }
+                if target == "chat" {
+                    onOpenChat?()
+                } else if target == "settings" {
+                    onOpenSettings?()
+                }
+                viewModel.externalNavigationTarget = nil
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                let screenH = UIScreen.main.bounds.height
+                let overlap = max(0, screenH - frame.origin.y)
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    keyboardHeight = overlap
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    keyboardHeight = 0
+                }
+            }
+            .alert("请求失败", isPresented: $showErrorAlert) {
+                Button("我知道了", role: .cancel) {}
+            } message: {
+                Text(errorAlertMessage)
             }
         }
     }
@@ -587,7 +739,7 @@ struct CoachOSMockView: View {
                 userAvatarControl
             }
             .padding(.trailing, 16)
-            .padding(.bottom, 56) // 下移：更贴近底部
+            .padding(.bottom, 56 + max(0, keyboardHeight - 24)) // 键盘弹出时同步抬升
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isDrawerOpen)
         }
@@ -670,7 +822,7 @@ struct CoachOSMockView: View {
     }
 
     private var floatingCoach: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             if !viewModel.coachBubble.isEmpty {
                 MarkdownText(text: viewModel.coachBubble)
                     .padding(.horizontal, 12)
@@ -707,7 +859,7 @@ struct CoachOSMockView: View {
             .buttonStyle(.plain)
         }
         .padding(.leading, 16)
-        .padding(.bottom, 56) // 下移：更贴近底部
+        .padding(.bottom, 56 + max(0, keyboardHeight - 24)) // 键盘弹出时同步抬升
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 
@@ -749,21 +901,102 @@ struct CoachOSMockView: View {
         _ = recorder.stopRecording()
     }
 
-    private var floatingCloseButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.primary)
-                .padding(10)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.8))
+    private var floatingTopControls: some View {
+        HStack(spacing: 6) {
+            if isTopControlsExpanded {
+                VStack(alignment: .trailing, spacing: 8) {
+                    if let onOpenChat {
+                        floatingEntryButton(
+                            title: "纯对话",
+                            tint: .orange,
+                            action: onOpenChat
+                        ) {
+                            ZStack {
+                                CoachAvatar(size: 34, isSpeaking: false)
+                                Image(systemName: "bubble.left.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(5)
+                                    .background(Color.orange, in: Circle())
+                                    .offset(x: 13, y: 12)
+                            }
+                            .frame(width: 34, height: 34)
+                        }
+                    }
+
+                    if let onOpenSettings {
+                        floatingEntryButton(
+                            title: "我的",
+                            tint: .blue,
+                            action: onOpenSettings
+                        ) {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.blue)
+                                .frame(width: 34, height: 34)
+                                .background(Color.blue.opacity(0.12), in: Circle())
+                        }
+                    }
+
+                    if showsCloseButton {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.primary)
+                                .padding(10)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                    isTopControlsExpanded.toggle()
+                }
+            } label: {
+                Image(systemName: isTopControlsExpanded ? "chevron.right.circle.fill" : "chevron.left.circle.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(4)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.8))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.trailing, 8)
+        .padding(.top, 84)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+    }
+
+    private func floatingEntryButton<Avatar: View>(
+        title: String,
+        tint: Color,
+        action: @escaping () -> Void,
+        @ViewBuilder avatar: () -> Avatar
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                avatar()
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 6)
+            .padding(.vertical, 6)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(
+                Capsule().stroke(Color.white.opacity(0.32), lineWidth: 0.8)
+            )
+            .shadow(color: tint.opacity(0.15), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(.plain)
-        .padding(.trailing, 12)
-        .padding(.top, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
     }
 
     @ViewBuilder
@@ -772,10 +1005,12 @@ struct CoachOSMockView: View {
         case .home:
             homeContentFromSections
         case .plans:
-            if viewModel.currentSubState == "today" {
-                plansTodayContentFromSections
+            if ["training_detail", "today"].contains(viewModel.currentSubState) {
+                plansContentFromSections(forcedExpanded: .training)
+            } else if ["nutrition_detail", "diet_detail", "nutrition", "diet"].contains(viewModel.currentSubState) {
+                plansContentFromSections(forcedExpanded: .nutrition)
             } else {
-                plansContentFromSections
+                plansContentFromSections()
             }
         case .training:
             trainingContentFromSections
@@ -793,7 +1028,9 @@ struct CoachOSMockView: View {
     private var homeContentFromSections: some View {
         let metricsSection = section(type: "metrics")
         let focusSection = section(type: "focus")
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 8) {
+            timelineCard
+            
             if let items = metricsSection?["items"] as? [[String: Any]], !items.isEmpty {
                 HStack(spacing: 10) {
                     ForEach(Array(items.prefix(2)).indices, id: \.self) { idx in
@@ -829,32 +1066,53 @@ struct CoachOSMockView: View {
         }
     }
 
-    private var plansContentFromSections: some View {
-        let planSection = section(type: "plan_overview")
-        let items = planSection?["items"] as? [[String: Any]] ?? []
-        return VStack(alignment: .leading, spacing: 10) {
-            if items.isEmpty {
-                defaultListContent
-            } else {
-                ForEach(items.indices, id: \.self) { idx in
-                    let item = items[idx]
-                    planRow(
-                        title: item["title"] as? String ?? "计划项",
-                        subtitle: item["subtitle"] as? String ?? ""
-                    ) {
-                        viewModel.openPlanItem(title: item["title"] as? String ?? "计划")
+    private func plansContentFromSections(forcedExpanded: PlanExpandedKind? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            weekStripCard
+            ZStack(alignment: .top) {
+                if let expanded = forcedExpanded ?? expandedPlanKind {
+                    planExpandedCard(for: expanded)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .trailing)),
+                            removal: .opacity.combined(with: .move(edge: .leading))
+                        ))
+                } else {
+                    HStack(alignment: .top, spacing: 10) {
+                        planSummaryCard(
+                            title: "训练计划",
+                            subtitle: "目标：腿 · 4 个动作",
+                            icon: "figure.strengthtraining.traditional",
+                            lines: ["杠铃深蹲", "腿举", "腿弯举", "提踵"],
+                            tint: .orange
+                        ) {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                expandedPlanKind = .training
+                                viewModel.currentSubState = "training_detail"
+                            }
+                        }
+                        planSummaryCard(
+                            title: "饮食计划",
+                            subtitle: "目标：2200 kcal",
+                            icon: "fork.knife",
+                            lines: ["第1餐 520 kcal", "第2餐 750 kcal", "第3餐 680 kcal", "P130/C240/F70"],
+                            tint: .teal
+                        ) {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                expandedPlanKind = .nutrition
+                                viewModel.currentSubState = "nutrition_detail"
+                            }
+                        }
                     }
+                    .transition(.opacity)
                 }
             }
         }
     }
 
     private var plansTodayContentFromSections: some View {
-        let todaySection = section(type: "today_overview")
-        let items = todaySection?["items"] as? [[String: Any]] ?? []
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(todaySection?["title"] as? String ?? "今日训练计划")
+                Text("今日训练计划")
                     .font(.headline)
                 Spacer()
                 Text("Today")
@@ -864,47 +1122,34 @@ struct CoachOSMockView: View {
                     .background(.thinMaterial, in: Capsule())
             }
 
-            if items.isEmpty {
-                defaultListContent
-            } else {
-                ForEach(items.indices, id: \.self) { idx in
-                    let item = items[idx]
-                    planRow(
-                        title: item["title"] as? String ?? "今日计划",
-                        subtitle: item["subtitle"] as? String ?? ""
-                    ) {
-                        // 用户点击页面元素时走“传统逻辑”：直接进入训练进行中页
-                        viewModel.navigateLocal(to: .training, subState: "session")
+            VStack(alignment: .leading, spacing: 10) {
+                Text("腿 · 4 个动作")
+                    .font(.headline)
+                ForEach(Array(todayExercisePreview.enumerated()), id: \.offset) { idx, item in
+                    HStack(spacing: 8) {
+                        Text("\(idx + 1)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
+                        Text(item.name)
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text("\(item.sets) 组 · \(item.reps)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-            }
-        }
-    }
-
-    private var trainingContentFromSections: some View {
-        let panel = section(type: "training_panel")
-        let fields = panel?["fields"] as? [String: Any] ?? [:]
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(panel?["title"] as? String ?? "专业训练面板")
-                    .font(.headline)
-                Spacer()
-                Text("休息 90s")
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.thinMaterial, in: Capsule())
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("项目：\(fields["exercise"] as? String ?? "杠铃卧推")")
-                    .font(.headline)
-                Text("\(fields["set_progress"] as? String ?? "第 2 组 / 共 4 组") · \(fields["target"] as? String ?? "8-10 次，建议 60kg")")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text("动作提示：\(fields["tip"] as? String ?? "下放 2 秒，底部停顿 0.5 秒，稳定推起")。")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Button {
+                    viewModel.navigateLocal(to: .training, subState: "session")
+                } label: {
+                    Text("开始训练")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.orange, in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -914,12 +1159,276 @@ struct CoachOSMockView: View {
                     .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
             )
 
-            HStack(spacing: 10) {
-                tinyAction("完成本组")
-                tinyAction("太重了")
-                tinyAction("太轻了")
+            VStack(alignment: .leading, spacing: 10) {
+                Text("今日饮食计划")
+                    .font(.headline)
+                ForEach(["第1餐 · 520 kcal", "第2餐 · 750 kcal", "第3餐 · 680 kcal"], id: \.self) { meal in
+                    HStack {
+                        Text(meal)
+                            .font(.subheadline)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text("目标：2200 kcal · 蛋白 130g · 碳水 240g · 脂肪 70g")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+            )
         }
+    }
+
+    private struct FoodItem: Identifiable {
+        let id = UUID()
+        let name: String
+        let kcalPer100g: Int
+        let p: Double
+        let c: Double
+        let f: Double
+        let unit: String = "100g"
+    }
+
+    private struct ActionLibraryItem: Identifiable {
+        let id = UUID()
+        let name: String
+        let sets: Int
+        let reps: String
+        let defaultWeight: String
+    }
+
+    @State private var foodLibrary: [FoodItem] = [
+        .init(name: "鸡胸肉", kcalPer100g: 133, p: 24.6, c: 0, f: 1.9),
+        .init(name: "糙米饭", kcalPer100g: 111, p: 2.6, c: 23.5, f: 0.9),
+        .init(name: "西兰花", kcalPer100g: 34, p: 4.1, c: 4.3, f: 0.6),
+        .init(name: "鸡蛋", kcalPer100g: 143, p: 13.3, c: 1.1, f: 8.8),
+        .init(name: "牛排", kcalPer100g: 250, p: 27.3, c: 0, f: 15.0),
+    ]
+    @State private var actionLibrary: [ActionLibraryItem] = [
+        .init(name: "卧推", sets: 4, reps: "8-10", defaultWeight: "50"),
+        .init(name: "硬拉", sets: 4, reps: "5", defaultWeight: "80"),
+        .init(name: "高位下拉", sets: 3, reps: "10-12", defaultWeight: "45"),
+        .init(name: "哑铃肩推", sets: 3, reps: "10", defaultWeight: "16"),
+        .init(name: "保加利亚分腿蹲", sets: 3, reps: "10", defaultWeight: "18"),
+    ]
+
+    @State private var isShowingFoodLibrary = false
+    @State private var isShowingCustomFood = false
+    @State private var isShowingActionLibrary = false
+    @State private var selectedFoodForImport: FoodItem?
+    @State private var importFoodAmount: Double = 100
+    @State private var customFoodName = ""
+    @State private var customFoodKcal = ""
+    @State private var customFoodP = ""
+    @State private var customFoodC = ""
+    @State private var customFoodF = ""
+
+    @State private var activeTrainingExerciseIdx: Int = 0
+    @State private var activeTrainingSetIdx: Int = 0
+    @State private var isTrainingActive: Bool = false
+    @State private var trainingTimer: Int = 0
+    @State private var trainingTimerActive: Bool = false
+    @State private var isTrainingListExpanded: Bool = true
+    @State private var isTopControlsExpanded: Bool = false
+    @State private var keyboardHeight: CGFloat = 0
+
+    private var trainingContentFromSections: some View {
+        let traditionalExercises = editableExercises.filter { $0.layer == .traditional }
+        let safeExerciseIdx = min(activeTrainingExerciseIdx, max(traditionalExercises.count - 1, 0))
+
+        return VStack(alignment: .leading, spacing: 6) {
+            // 顶部动作列表，可折叠，固定高度区域
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                        isTrainingListExpanded.toggle()
+                    }
+                } label: {
+                    HStack {
+                        Text("今日动作列表（传统训练）")
+                            .font(.headline)
+                        Spacer()
+                        Image(systemName: isTrainingListExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                if isTrainingListExpanded {
+                    ScrollView {
+                        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            ForEach(Array(traditionalExercises.enumerated()), id: \.element.id) { idx, exercise in
+                                let doneCount = exercise.setRows.filter(\.done).count
+                                Button {
+                                    activeTrainingExerciseIdx = idx
+                                    activeTrainingSetIdx = 0
+                                    isTrainingActive = false
+                                    trainingTimerActive = false
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(exercise.name)
+                                            .font(.caption.weight(.semibold))
+                                            .lineLimit(1)
+                                            .foregroundStyle(safeExerciseIdx == idx ? .orange : .primary)
+                                        Text("\(doneCount)/\(exercise.setRows.count) 组")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(doneCount >= exercise.setRows.count ? .green : .secondary)
+                                        ProgressView(value: exercise.setRows.isEmpty ? 0 : Double(doneCount), total: Double(max(exercise.setRows.count, 1)))
+                                            .tint(doneCount >= exercise.setRows.count ? .green : .orange)
+                                    }
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(
+                                        safeExerciseIdx == idx ? Color.orange.opacity(0.12) : Color.black.opacity(0.04),
+                                        in: RoundedRectangle(cornerRadius: 10)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .frame(height: 140, alignment: .top)
+                    .clipped()
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .padding(12)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+
+            // 底部执行面板，固定高度
+            VStack(alignment: .leading, spacing: 12) {
+                if traditionalExercises.isEmpty {
+                    Text("当前没有传统训练动作，请先在计划中添加。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    let currentExercise = traditionalExercises[safeExerciseIdx]
+                    let hasSet = !currentExercise.setRows.isEmpty
+
+                    HStack {
+                        Text(currentExercise.name)
+                            .font(.title3.weight(.bold))
+                        Spacer()
+                        Text(hasSet ? "第 \(min(activeTrainingSetIdx + 1, currentExercise.setRows.count)) 组 / 共 \(currentExercise.setRows.count) 组" : "无组次")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if hasSet {
+                        let safeSetIdx = min(activeTrainingSetIdx, currentExercise.setRows.count - 1)
+                        let currentSet = currentExercise.setRows[safeSetIdx]
+                        let doneCount = currentExercise.setRows.filter(\.done).count
+                        let plannedCount = max(currentExercise.sets, 1)
+
+                        HStack {
+                            Text("当前组 #\(safeSetIdx + 1)")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color.orange.opacity(0.15), in: Capsule())
+                            Spacer()
+                            Text("完成 \(doneCount) / 计划 \(plannedCount)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(doneCount >= plannedCount ? .green : .secondary)
+                        }
+
+                        HStack(spacing: 26) {
+                            VStack {
+                                Text(currentSet.weightKg)
+                                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                                Text("kg").font(.caption2).foregroundStyle(.secondary)
+                            }
+                            VStack {
+                                Text(currentSet.reps)
+                                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                                Text("次").font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        if trainingTimerActive {
+                            Text(formatTime(trainingTimer))
+                                .font(.system(size: 44, weight: .light, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.orange)
+                                .frame(maxWidth: .infinity)
+                        }
+
+                        HStack(spacing: 10) {
+                            if !isTrainingActive {
+                                Button {
+                                    isTrainingActive = true
+                                    trainingTimer = 0
+                                    trainingTimerActive = true
+                                } label: {
+                                    Text("开始本组")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 44)
+                                        .background(Color.orange, in: Capsule())
+                                }
+                            }
+
+                            Button {
+                                let refId = currentExercise.id
+                                if let globalIdx = editableExercises.firstIndex(where: { $0.id == refId }), editableExercises[globalIdx].setRows.indices.contains(safeSetIdx) {
+                                    editableExercises[globalIdx].setRows[safeSetIdx].done = true
+                                }
+                                isTrainingActive = false
+                                trainingTimerActive = false
+
+                                if safeSetIdx < currentExercise.setRows.count - 1 {
+                                    activeTrainingSetIdx = safeSetIdx + 1
+                                } else if safeExerciseIdx < traditionalExercises.count - 1 {
+                                    activeTrainingExerciseIdx = safeExerciseIdx + 1
+                                    activeTrainingSetIdx = 0
+                                } else {
+                                    // 超计划组：到末组后继续追加新组并进入（计划组数保持不变）
+                                    let nextNo = currentExercise.setRows.count + 1
+                                    if let globalIdx = editableExercises.firstIndex(where: { $0.id == refId }) {
+                                        editableExercises[globalIdx].setRows.append(
+                                            .init(setNo: nextNo, weightKg: currentSet.weightKg, reps: currentSet.reps, done: false)
+                                        )
+                                        activeTrainingSetIdx = nextNo - 1
+                                    }
+                                }
+                            } label: {
+                                Text("完成本组")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44)
+                                    .background(Color.green, in: Capsule())
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 220, alignment: .top)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .frame(height: 410)
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+            if trainingTimerActive { trainingTimer += 1 }
+        }
+    }
+
+    private func formatTime(_ seconds: Int) -> String {
+        let m = seconds / 60
+        let s = seconds % 60
+        return String(format: "%02d:%02d", m, s)
     }
 
     private var defaultListContent: some View {
@@ -1062,6 +1571,631 @@ struct CoachOSMockView: View {
         }
     }
 
+    private struct ExercisePreview: Identifiable {
+        let id = UUID()
+        let name: String
+        var sets: Int
+        var reps: String
+        var weightKg: String
+        var note: String
+        var perSetTiming: Bool
+        var difficulty: String
+        var setRows: [SetRowPreview]
+        var isExpanded: Bool = false
+        var layer: ExerciseLayer = .traditional
+    }
+
+    private enum ExerciseLayer: String, CaseIterable {
+        case traditional = "传统训练"
+        case template = "增强模板"
+        case free = "自由记录"
+    }
+
+    private struct SetRowPreview: Identifiable {
+        let id = UUID()
+        var setNo: Int
+        var weightKg: String
+        var reps: String
+        var done: Bool
+    }
+
+    private struct NutritionMealPreview: Identifiable {
+        let id = UUID()
+        var name: String
+        var time: String
+        var kcal: Int
+        var macros: String
+        var desc: String
+    }
+
+    private struct ActivityLogPreview: Identifiable {
+        let id = UUID()
+        var icon: String
+        var name: String
+        var detail: String
+    }
+
+    private var todayExercisePreview: [ExercisePreview] {
+        editableExercises
+    }
+
+    private func addSetRow(for exerciseIndex: Int) {
+        guard editableExercises.indices.contains(exerciseIndex) else { return }
+        let nextNo = (editableExercises[exerciseIndex].setRows.last?.setNo ?? 0) + 1
+        editableExercises[exerciseIndex].setRows.append(
+            .init(setNo: nextNo, weightKg: editableExercises[exerciseIndex].weightKg, reps: editableExercises[exerciseIndex].reps, done: false)
+        )
+        editableExercises[exerciseIndex].sets = editableExercises[exerciseIndex].setRows.count
+    }
+
+    private func syncSetNos(for exerciseIndex: Int) {
+        guard editableExercises.indices.contains(exerciseIndex) else { return }
+        for i in editableExercises[exerciseIndex].setRows.indices {
+            editableExercises[exerciseIndex].setRows[i].setNo = i + 1
+        }
+        editableExercises[exerciseIndex].sets = editableExercises[exerciseIndex].setRows.count
+    }
+
+    private var weekStripCard: some View {
+        let days = [("日", "8"), ("一", "9"), ("二", "10"), ("三", "11"), ("四", "12"), ("五", "13"), ("六", "14")]
+        return HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                ForEach(Array(days.enumerated()), id: \.offset) { idx, day in
+                    VStack(spacing: 5) {
+                        Circle()
+                            .fill(idx == 3 ? Color.orange.opacity(0.8) : Color.black.opacity(0.12))
+                            .frame(width: 6, height: 6)
+                        Text(day.0)
+                            .font(.caption2)
+                            .foregroundStyle(idx == 3 ? Color.orange : Color.secondary)
+                        Text(day.1)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(idx == 3 ? Color.orange : Color.primary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(idx == 3 ? Color.orange.opacity(0.16) : Color.clear)
+                    )
+                }
+            }
+            .padding(10)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+            )
+            Image(systemName: "calendar")
+                .font(.headline)
+                .frame(width: 44, height: 44)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+                )
+        }
+    }
+
+    private var timelineCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("06:00").font(.caption2).foregroundStyle(.secondary)
+                Spacer()
+                Text("12:00").font(.caption2).foregroundStyle(.secondary)
+                Spacer()
+                Text("18:00").font(.caption2).foregroundStyle(.secondary)
+                Spacer()
+                Text("22:00").font(.caption2).foregroundStyle(.secondary)
+            }
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.35), Color.orange.opacity(0.22), Color.black.opacity(0.35)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 26)
+                HStack(spacing: 0) {
+                    Capsule().fill(Color.orange.opacity(0.75)).frame(width: 4, height: 18).offset(x: 76)
+                    Spacer()
+                }
+                HStack(spacing: 0) {
+                    Circle().fill(Color.blue).frame(width: 12, height: 12).offset(x: 160)
+                    Spacer()
+                }
+                HStack(spacing: 0) {
+                    Circle().fill(Color.red).frame(width: 12, height: 12).offset(x: 255)
+                    Spacer()
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                ProgressView(value: 0.72)
+                    .tint(.orange)
+                Text("已摄入 1950 / 目标 2200 kcal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    miniMacro(label: "蛋白", value: "118 / 130g", tint: .red)
+                    miniMacro(label: "碳水", value: "210 / 240g", tint: .blue)
+                    miniMacro(label: "脂肪", value: "58 / 70g", tint: .orange)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+        )
+    }
+
+    private func miniMacro(label: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.primary)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(tint.opacity(0.25))
+                .frame(height: 4)
+        }
+    }
+
+    private func planSummaryCard(
+        title: String,
+        subtitle: String,
+        icon: String,
+        lines: [String],
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label(title, systemImage: icon)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(lines, id: \.self) { line in
+                    Text("• \(line)")
+                        .font(.caption2)
+                        .foregroundStyle(.primary.opacity(0.9))
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.42), tint.opacity(0.08)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 14)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func planExpandedCard(for kind: PlanExpandedKind) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) {
+                        expandedPlanKind = nil
+                        viewModel.currentSubState = "overview"
+                    }
+                } label: {
+                    Label("返回", systemImage: "chevron.left")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Text(kind == .training ? "训练详情" : "饮食详情")
+                    .font(.subheadline.weight(.semibold))
+            }
+            if kind == .training {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("周三 · 腿 · \(editableExercises.count) 个动作")
+                        .font(.headline)
+                    
+                    // 三层模型分类展示
+                    ForEach(ExerciseLayer.allCases, id: \.self) { layer in
+                        let layerExercises = editableExercises.filter { $0.layer == layer }
+                        if !layerExercises.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(layer.rawValue)
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(.orange)
+                                    .padding(.top, 4)
+                                
+                                ForEach(layerExercises) { exercise in
+                                    let idx = editableExercises.firstIndex(where: { $0.id == exercise.id })!
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Button {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                                editableExercises[idx].isExpanded.toggle()
+                                            }
+                                        } label: {
+                                            HStack(spacing: 10) {
+                                                Circle()
+                                                    .fill(layer == .traditional ? Color.orange.opacity(0.1) : Color.gray.opacity(0.1))
+                                                    .frame(width: 44, height: 44)
+                                                    .overlay(
+                                                        Image(systemName: layer == .traditional ? "figure.strengthtraining.traditional" : (layer == .template ? "bolt.fill" : "pencil.and.outline"))
+                                                            .font(.system(size: 18))
+                                                            .foregroundStyle(layer == .traditional ? .orange : .secondary)
+                                                    )
+                                                VStack(alignment: .leading, spacing: 3) {
+                                                    Text(editableExercises[idx].name)
+                                                        .font(.subheadline.weight(.semibold))
+                                                    Text(layer == .traditional ? "\(editableExercises[idx].setRows.count) 组" : editableExercises[idx].reps)
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                Spacer()
+                                                Button(role: .destructive) {
+                                                    editableExercises.remove(at: idx)
+                                                } label: {
+                                                    Image(systemName: "trash")
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.red)
+                                                }
+                                                .buttonStyle(.plain)
+
+                                                Image(systemName: editableExercises[idx].isExpanded ? "chevron.up" : "chevron.down")
+                                                    .font(.caption2.weight(.bold))
+                                                    .foregroundStyle(.blue)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        if editableExercises[idx].isExpanded {
+                                            VStack(alignment: .leading, spacing: 10) {
+                                                if layer == .traditional {
+                                                    // 传统训练的详细编辑
+                                                    TextField("点击输入备注", text: $editableExercises[idx].note)
+                                                        .textFieldStyle(.plain)
+                                                        .font(.subheadline)
+                                                        .padding(.vertical, 6)
+                                                        .padding(.horizontal, 10)
+                                                        .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+
+                                                    ForEach(editableExercises[idx].setRows.indices, id: \.self) { setIdx in
+                                                        HStack(spacing: 8) {
+                                                            Text("\(editableExercises[idx].setRows[setIdx].setNo)")
+                                                                .font(.subheadline.weight(.semibold))
+                                                                .frame(width: 40, height: 40)
+                                                                .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+
+                                                            VStack(alignment: .leading, spacing: 1) {
+                                                                TextField("重量", text: $editableExercises[idx].setRows[setIdx].weightKg)
+                                                                    .keyboardType(.decimalPad)
+                                                                    .font(.subheadline.weight(.semibold))
+                                                            }
+                                                            .frame(width: 65, height: 40)
+                                                            .padding(.horizontal, 4)
+                                                            .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+
+                                                            VStack(alignment: .leading, spacing: 1) {
+                                                                TextField("次数", text: $editableExercises[idx].setRows[setIdx].reps)
+                                                                    .keyboardType(.numberPad)
+                                                                    .font(.subheadline.weight(.semibold))
+                                                            }
+                                                            .frame(width: 65, height: 40)
+                                                            .padding(.horizontal, 4)
+                                                            .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+
+                                                            Button {
+                                                                editableExercises[idx].setRows[setIdx].done.toggle()
+                                                            } label: {
+                                                                Image(systemName: editableExercises[idx].setRows[setIdx].done ? "checkmark.circle.fill" : "checkmark")
+                                                                    .font(.system(size: 20, weight: .semibold))
+                                                                    .foregroundStyle(editableExercises[idx].setRows[setIdx].done ? Color.green : Color.gray)
+                                                                    .frame(width: 40, height: 40)
+                                                                    .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                                                            }
+                                                            .buttonStyle(.plain)
+                                                        }
+                                                    }
+                                                    
+                                                    Button { addSetRow(for: idx) } label: {
+                                                        Text("+ 新增一组").font(.caption.weight(.semibold)).foregroundStyle(.blue)
+                                                    }
+                                                } else {
+                                                    // 通用/自由记录的编辑
+                                                    VStack(alignment: .leading, spacing: 8) {
+                                                        TextField("数值 (如: 8.2 km / 45 min)", text: $editableExercises[idx].reps)
+                                                            .textFieldStyle(.roundedBorder)
+                                                        TextField("备注 (如: 配速 / RPE)", text: $editableExercises[idx].note)
+                                                            .textFieldStyle(.roundedBorder)
+                                                    }
+                                                    .font(.caption)
+                                                }
+                                            }
+                                            .padding(.leading, 54)
+                                            .transition(.opacity)
+                                        }
+                                    }
+                                    .padding(10)
+                                    .background(Color.white.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
+                                }
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            isShowingActionLibrary = true
+                        } label: {
+                            Label("从动作库新增", systemImage: "plus.square.on.square")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        Button {
+                            viewModel.navigateLocal(to: .training, subState: "session")
+                        } label: {
+                            Text("开始传统训练")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.orange, in: RoundedRectangle(cornerRadius: 12))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
+                )
+                .sheet(isPresented: $isShowingActionLibrary) {
+                    NavigationStack {
+                        List(actionLibrary) { item in
+                            Button {
+                                let rows = (1...item.sets).map { no in
+                                    SetRowPreview(setNo: no, weightKg: item.defaultWeight, reps: item.reps, done: false)
+                                }
+                                editableExercises.append(
+                                    .init(
+                                        name: item.name,
+                                        sets: item.sets,
+                                        reps: item.reps,
+                                        weightKg: item.defaultWeight,
+                                        note: "",
+                                        perSetTiming: false,
+                                        difficulty: "正常",
+                                        setRows: rows,
+                                        layer: .traditional
+                                    )
+                                )
+                                isShowingActionLibrary = false
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.name).font(.subheadline.weight(.semibold))
+                                        Text("\(item.sets) 组 · \(item.reps) · 默认 \(item.defaultWeight)kg")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "plus.circle.fill").foregroundStyle(.blue)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .navigationTitle("动作库")
+                        .toolbar { Button("关闭") { isShowingActionLibrary = false } }
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("今日饮食目标：2200 kcal")
+                        .font(.headline)
+                    
+                    ForEach(nutritionMeals) { meal in
+                        let mIdx = nutritionMeals.firstIndex(where: { $0.id == meal.id })!
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                TextField("餐次名称", text: $nutritionMeals[mIdx].name)
+                                    .font(.subheadline.weight(.bold))
+                                Spacer()
+                                TextField("时间", text: $nutritionMeals[mIdx].time)
+                                    .font(.caption)
+                                    .frame(width: 50)
+                                Button {
+                                    nutritionMeals.remove(at: mIdx)
+                                } label: {
+                                    Image(systemName: "trash").font(.caption).foregroundStyle(.red)
+                                }
+                            }
+                            
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    TextField("描述", text: $nutritionMeals[mIdx].desc)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(nutritionMeals[mIdx].macros)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.orange)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing) {
+                                    HStack(spacing: 2) {
+                                        TextField("热量", value: $nutritionMeals[mIdx].kcal, formatter: NumberFormatter())
+                                            .font(.subheadline.weight(.semibold))
+                                            .frame(width: 40)
+                                            .multilineTextAlignment(.trailing)
+                                        Text("kcal").font(.caption2)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.white.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    
+                    HStack(spacing: 12) {
+                        Button { isShowingFoodLibrary = true } label: {
+                            Label("食物库导入", systemImage: "magnifyingglass")
+                                .font(.caption.weight(.semibold))
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity)
+                                .background(Color.blue.opacity(0.1), in: Capsule())
+                        }
+                        
+                        Button { isShowingCustomFood = true } label: {
+                            Label("自定义添加", systemImage: "plus")
+                                .font(.caption.weight(.semibold))
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity)
+                                .background(Color.orange.opacity(0.1), in: Capsule())
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
+                )
+                .sheet(isPresented: $isShowingFoodLibrary) {
+                    NavigationStack {
+                        List(foodLibrary) { food in
+                            Button {
+                                importFoodAmount = 100
+                                isShowingFoodLibrary = false
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    selectedFoodForImport = food
+                                }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(food.name).font(.headline)
+                                        Text("P:\(food.p, specifier: "%.1f") C:\(food.c, specifier: "%.1f") F:\(food.f, specifier: "%.1f")").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text("\(food.kcalPer100g) kcal").font(.subheadline.weight(.bold))
+                                }
+                            }
+                        }
+                        .navigationTitle("食物库")
+                        .toolbar { Button("关闭") { isShowingFoodLibrary = false } }
+                    }
+                }
+                .sheet(isPresented: $isShowingCustomFood) {
+                    NavigationStack {
+                        Form {
+                            Section("基本信息") {
+                                TextField("食物名称", text: $customFoodName)
+                                TextField("热量 (kcal)", text: $customFoodKcal).keyboardType(.numberPad)
+                            }
+                            Section("营养素 (可选)") {
+                                TextField("蛋白质 (g)", text: $customFoodP).keyboardType(.decimalPad)
+                                TextField("碳水 (g)", text: $customFoodC).keyboardType(.decimalPad)
+                                TextField("脂肪 (g)", text: $customFoodF).keyboardType(.decimalPad)
+                            }
+                        }
+                        .navigationTitle("自定义添加")
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) { Button("取消") { isShowingCustomFood = false } }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("添加") {
+                                    nutritionMeals.append(.init(
+                                        name: customFoodName,
+                                        time: "12:00",
+                                        kcal: Int(customFoodKcal) ?? 0,
+                                        macros: "P\(customFoodP)/C\(customFoodC)/F\(customFoodF)",
+                                        desc: "自定义添加"
+                                    ))
+                                    isShowingCustomFood = false
+                                }
+                            }
+                        }
+                    }
+                }
+                .sheet(item: $selectedFoodForImport) { food in
+                    NavigationStack {
+                        let ratio = importFoodAmount / 100.0
+                        let kcal = Int((Double(food.kcalPer100g) * ratio).rounded())
+                        let p = food.p * ratio
+                        let c = food.c * ratio
+                        let f = food.f * ratio
+
+                        Form {
+                            Section("食物") {
+                                Text(food.name)
+                                Text("每100g: \(food.kcalPer100g) kcal")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Section("摄入量") {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("\(Int(importFoodAmount)) g")
+                                        .font(.headline)
+                                    Slider(value: $importFoodAmount, in: 20...500, step: 10)
+                                }
+                            }
+
+                            Section("本次摄入估算") {
+                                Text("热量: \(kcal) kcal")
+                                Text(String(format: "蛋白 %.1fg · 碳水 %.1fg · 脂肪 %.1fg", p, c, f))
+                            }
+                        }
+                        .navigationTitle("按摄入量导入")
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("取消") { selectedFoodForImport = nil }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("添加") {
+                                    nutritionMeals.append(
+                                        .init(
+                                            name: food.name,
+                                            time: "12:00",
+                                            kcal: kcal,
+                                            macros: String(format: "P%.1f/C%.1f/F%.1f", p, c, f),
+                                            desc: "食物库导入 · \(Int(importFoodAmount))g"
+                                        )
+                                    )
+                                    selectedFoodForImport = nil
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private func metricTile(title: String, value: String, hint: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -1106,8 +2240,8 @@ struct CoachOSMockView: View {
         .buttonStyle(.plain)
     }
 
-    private func tinyAction(_ title: String) -> some View {
-        Button(title) {}
+    private func tinyAction(_ title: String, action: @escaping () -> Void = {}) -> some View {
+        Button(title, action: action)
             .font(.caption)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)

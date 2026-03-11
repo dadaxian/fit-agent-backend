@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import time
 import random
 import re
 from dataclasses import dataclass
@@ -15,6 +17,8 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from fit_agent.database import SessionLocal
 from fit_agent.db import MemorySummary, MessageMemory
+
+logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 MEMORY_WINDOW_SIZE = int(os.environ.get("MEMORY_WINDOW_SIZE", "10"))
@@ -71,9 +75,11 @@ def _replace_content(msg: Any, content: str) -> Any:
 
 def get_memory_snapshot(user_id: str) -> MemorySnapshot:
     """从数据库获取最新的记忆快照，强制不使用缓存。"""
+    t0 = time.perf_counter()
     with SessionLocal() as db:
         row = db.query(MemorySummary).filter_by(user_id=user_id).first()
         if not row:
+            logger.info("[TIMING] memory: get_memory_snapshot %.3fs (no row)", time.perf_counter() - t0)
             return MemorySnapshot(None, [], [], None, {}, None)
         
         def _parse_json(val, default):
@@ -82,7 +88,7 @@ def get_memory_snapshot(user_id: str) -> MemorySnapshot:
             try: return json.loads(val)
             except: return default
 
-        return MemorySnapshot(
+        out = MemorySnapshot(
             summary=row.summary_text,
             key_facts=_parse_json(row.key_facts, []),
             scenarios=_parse_json(row.scenarios, []),
@@ -90,6 +96,8 @@ def get_memory_snapshot(user_id: str) -> MemorySnapshot:
             meta_data=_parse_json(row.meta_data, {}),
             updated_at=row.updated_at,
         )
+        logger.info("[TIMING] memory: get_memory_snapshot %.3fs", time.perf_counter() - t0)
+        return out
 
 async def _save_memory_state(user_id: str, payload: dict, new_meta: dict, scores: list, log_fn):
     """持久化摘要、背景、情境及消息评分。"""
@@ -153,12 +161,16 @@ def build_memory_context(user_id: str) -> str:
     return "\n\n".join(parts).strip()
 
 def apply_forgetting_to_messages(user_id: str, messages: list[Any]) -> list[Any]:
+    t0 = time.perf_counter()
     if not messages: return messages
     # 临时方案：仅保留最近 20 条，旧的遗忘逻辑先保留但暂不启用
     if len(messages) > 20:
+        logger.info("[TIMING] memory: apply_forgetting_to_messages %.3fs (trim only, msgs=%d)", time.perf_counter() - t0, len(messages))
         return messages[-20:]
     cutoff = max(len(messages) - MEMORY_WINDOW_SIZE, 0)
-    if cutoff <= 0: return messages
+    if cutoff <= 0:
+        logger.info("[TIMING] memory: apply_forgetting_to_messages %.3fs (no cutoff, msgs=%d)", time.perf_counter() - t0, len(messages))
+        return messages
 
     snap = get_memory_snapshot(user_id)
     time_boost = min(0.2, (datetime.now(timezone.utc) - snap.updated_at).total_seconds() / 259200.0) if snap.updated_at else 0
@@ -184,6 +196,7 @@ def apply_forgetting_to_messages(user_id: str, messages: list[Any]) -> list[Any]
                 new_messages.append(_replace_content(msg, "已忘记"))
             else: new_messages.append(msg)
         db.commit()
+    logger.info("[TIMING] memory: apply_forgetting_to_messages %.3fs (msgs=%d, cutoff=%d)", time.perf_counter() - t0, len(messages), cutoff)
     return new_messages
 
 async def update_memory_for_window(user_id: str, messages: list[Any], model, on_debug_log=None) -> None:
