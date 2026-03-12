@@ -1,60 +1,76 @@
+2026-03-11T17:40:39.807125Z [info     ] Running database migrations... [aegra_api.core.migrations] filename=migrations.py func_name=run_migrations lineno=85
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
 INFO  [alembic.runtime.migration] Will assume transactional DDL.
-ERROR [app.app_logs] {'exception_class': 'AttributeError', 'exc_info': AttributeError("'list' object has no attribute 'items'"), 'stack_info': True, 'event': 'An unhandled exception was caught by middleware; re-raising to allow app handlers to format response', 'level': 'error', 'logger': 'app.app_logs', 'lineno': 47, 'filename': 'logger_middleware.py', 'func_name': '__call__', 'timestamp': '2026-03-08T18:04:02.849058Z'}
+/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/jwt/api_jwt.py:153: InsecureKeyLengthWarning: The HMAC key is 16 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py:177: RuntimeWarning: coroutine '_route_after_agent.<locals>.trigger_memory_task.<locals>._bg_task' was never awaited
+  asyncio.run_coroutine_threadsafe(_bg_task(), asyncio.get_event_loop())
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+ERROR [aegra_api.api.runs] {'event': "[execute_run_async] streaming error for run_id=de45840f-efaa-42a0-a582-5c9076fad994: There is no current event loop in thread 'asyncio_0'.", 'level': 'error', 'logger': 'aegra_api.api.runs', 'filename': 'runs.py', 'func_name': 'execute_run_async', 'lineno': 953, 'timestamp': '2026-03-11T17:41:04.282554Z'}
+ERROR [aegra_api.api.runs] {'exc_info': True, 'event': '[execute_run_async] run failed run_id=de45840f-efaa-42a0-a582-5c9076fad994', 'level': 'error', 'logger': 'aegra_api.api.runs', 'filename': 'runs.py', 'func_name': 'execute_run_async', 'lineno': 983, 'timestamp': '2026-03-11T17:41:04.354123Z'}
 Traceback (most recent call last):
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/aegra_api/middleware/logger_middleware.py", line 43, in __call__
-    await self.app(scope, receive, inner_send)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
-    await route.handle(scope, receive, send)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
-    await self.app(scope, receive, send)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 129, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 115, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 630, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
+  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py", line 172, in trigger_memory_task
+    loop = asyncio.get_running_loop()
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/aegra_api/api/runs.py", line 911, in execute_run_async
+    async for event_type, event_data in stream_graph_events(
+    ...<36 lines>...
+            raise
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/aegra_api/services/graph_streaming.py", line 255, in stream_graph_events
+    async for event in stream:
+    ...<31 lines>...
+            _normalize_checkpoint_payload(chunk.get("payload"))
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/main.py", line 2997, in astream
+    async for _ in runner.atick(
+    ...<13 lines>...
+            yield o
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/_runner.py", line 304, in atick
+    await arun_with_retry(
+    ...<15 lines>...
     )
-    ^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 325, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/pregel/_retry.py", line 163, in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/_internal/_runnable.py", line 711, in ainvoke
+    input = await step.ainvoke(input, config)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/_internal/_runnable.py", line 473, in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/graph/_branch.py", line 189, in _aroute
+    result = await self.path.ainvoke(value, config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langgraph/_internal/_runnable.py", line 464, in ainvoke
+    ret = await asyncio.create_task(coro, context=context)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langchain_core/runnables/config.py", line 636, in run_in_executor
+    return await asyncio.get_running_loop().run_in_executor(
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/anyio/to_thread.py", line 63, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
     )
     ^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 2502, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 986, in run
-    result = context.run(func, *args)
-  File "/Users/guzhengzhao/project/fit-agent/custom_routes.py", line 258, in coach_os_get_module
-    sections = _plan_sections_from_workspace(user_id)
-  File "/Users/guzhengzhao/project/fit-agent/custom_routes.py", line 80, in _plan_sections_from_workspace
-    for day, detail in list(weekly.items())[:7]:
-                            ^^^^^^^^^^^^
-AttributeError: 'list' object has no attribute 'items'
-ERROR [app.access_logs] {'http': {'url': '/coach-os/modules/plans', 'status_code': 500, 'method': 'GET', 'version': '1.1'}, 'network': {'client': {'ip': '127.0.0.1', 'port': 55468}}, 'duration': 30040083, 'event': '127.0.0.1:55468 - "GET /coach-os/modules/plans HTTP/1.1" 500', 'level': 'error', 'logger': 'app.access_logs', 'lineno': 82, 'filename': 'logger_middleware.py', 'func_name': '__call__', 'timestamp': '2026-03-08T18:04:02.863809Z'}
+  File "/Users/guzhengzhao/.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "/Users/guzhengzhao/.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "/Users/guzhengzhao/project/fit-agent/.venv/lib/python3.14/site-packages/langchain_core/runnables/config.py", line 627, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py", line 220, in route_after_agent
+    return _route_after_agent(state, config)
+  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py", line 191, in _route_after_agent
+    trigger_memory_task()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/guzhengzhao/project/fit-agent/src/fit_agent/nodes.py", line 177, in trigger_memory_task
+    asyncio.run_coroutine_threadsafe(_bg_task(), asyncio.get_event_loop())
+                                                 ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/guzhengzhao/.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/asyncio/events.py", line 715, in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+                       % threading.current_thread().name)
+RuntimeError: There is no current event loop in thread 'asyncio_0'.
+During task with name 'brain' and id '6033388e-7e07-cf15-4dc3-8fa7f662160c'
+ERROR [aegra_api.api.runs] {'event': "[wait_for_run] run failed run_id=de45840f-efaa-42a0-a582-5c9076fad994 error=There is no current event loop in thread 'asyncio_0'.", 'level': 'error', 'logger': 'aegra_api.api.runs', 'filename': 'runs.py', 'func_name': 'wait_for_run', 'lineno': 704, 'timestamp': '2026-03-11T17:41:04.639447Z'}
+

@@ -161,22 +161,112 @@ private final class CoachOSMockViewModel: ObservableObject {
             do {
                 let tid = try await ensureThread(using: client)
                 let message = buildHumanMessage(text: userText)
-                let output = try await client.waitRun(threadId: tid, messages: [message])
-                let rawMessages = extractMessages(from: output)
-                let commands = extractUICommands(from: rawMessages)
+                let stream = try await client.streamRun(threadId: tid, messages: [message])
+
+                var streamingText = ""      // 流式累积的气泡文字
+                var finalMessages: [[String: Any]] = []  // 最终完整消息，用于提取 UI 命令
+
+                for try await event in stream {
+                    switch event.event {
+
+                    case "messages/partial":
+                        // 逐 token 流式更新气泡——只取 AI 类型的文本 content
+                        let msgs = (event.data?["messages"] as? [[String: Any]])
+                            ?? (event.data.map { [$0] } ?? [])
+                        for msg in msgs {
+                            guard (msg["type"] as? String) == "ai" ||
+                                  (msg["role"] as? String) == "assistant" else { continue }
+                            if let text = extractTextFromContent(msg["content"]), !text.isEmpty {
+                                streamingText = text
+                                self.coachBubble = streamingText
+                                // 流式过程中关掉 thinking 旋转，改成直接显示文字
+                                if self.isAgentThinking { self.isAgentThinking = false }
+                            }
+                        }
+
+                    case "messages/complete":
+                        // 完整消息到齐，记录下来最后处理 UI 命令
+                        let msgs = (event.data?["messages"] as? [[String: Any]])
+                            ?? (event.data.map { [$0] } ?? [])
+                        finalMessages.append(contentsOf: msgs)
+
+                    case "updates":
+                        // state 更新快照，包含 tool 消息（ui_command 结果在这里）
+                        if let msgs = event.data?["messages"] as? [[String: Any]] {
+                            finalMessages.append(contentsOf: msgs)
+                        }
+                        // 也从 brain/executor 节点的 messages 里取
+                        for (_, val) in (event.data ?? [:]) {
+                            if let nodeData = val as? [String: Any],
+                               let msgs = nodeData["messages"] as? [[String: Any]] {
+                                finalMessages.append(contentsOf: msgs)
+                            }
+                        }
+
+                    case "events":
+                        // LangGraph custom event: adispatch_custom_event("ui_state", payload)
+                        // Aegra 把它包在 events SSE 里：{"name": "ui_state", "data": {...}}
+                        if let name = event.data?["name"] as? String, name == "ui_state",
+                           let payload = event.data?["data"] as? [String: Any],
+                           let parsed = parseUIStateFromPayload(payload) {
+                            self.uiState = parsed
+                            self.selectedModule = parsed.module
+                            self.currentSubState = parsed.subState
+                        }
+
+                    case "custom_event", "on_custom_event":
+                        // 兼容不同版本 Aegra 的 event 名称
+                        if let name = event.data?["name"] as? String, name == "ui_state",
+                           let payload = event.data?["data"] as? [String: Any],
+                           let parsed = parseUIStateFromPayload(payload) {
+                            self.uiState = parsed
+                            self.selectedModule = parsed.module
+                            self.currentSubState = parsed.subState
+                        }
+
+                    default:
+                        break
+                    }
+                }
+
+                // 流结束后：处理 UI 命令
+                let commands = extractUICommands(from: finalMessages)
                 for cmd in commands {
                     applyUICommand(cmd)
                 }
-                if let aiText = extractLatestAIText(from: rawMessages) {
-                    self.updateCoachReply(aiText)
-                } else if commands.isEmpty {
-                    self.error = "未解析到回复或页面指令"
+
+                // 如果流式过程没拿到文字，再从 finalMessages 里补一次
+                if streamingText.isEmpty {
+                    if let aiText = extractLatestAIText(from: finalMessages) {
+                        self.updateCoachReply(aiText)
+                    } else if commands.isEmpty {
+                        self.error = "未解析到回复或页面指令"
+                    }
                 }
+
             } catch {
                 self.error = error.localizedDescription
                 self.updateCoachReply("请求失败，请稍后重试。")
             }
         }
+    }
+
+    /// 从消息 content 字段提取纯文本（兼容 String 和 [{type:text, text:...}] 两种格式）
+    private func extractTextFromContent(_ content: Any?) -> String? {
+        if let text = content as? String {
+            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }
+        if let blocks = content as? [[String: Any]] {
+            let parts = blocks.compactMap { block -> String? in
+                guard (block["type"] as? String) == "text" else { return nil }
+                let t = (block["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return t.isEmpty ? nil : t
+            }
+            let joined = parts.joined(separator: "")
+            return joined.isEmpty ? nil : joined
+        }
+        return nil
     }
 
     private func requestModuleData(for module: CoachOSModule) {
@@ -1046,14 +1136,15 @@ struct CoachOSMockView: View {
             }
 
             if let focus = focusSection {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text(focus["title"] as? String ?? "今日重点")
-                        .font(.headline)
+                        .font(.title3.weight(.bold))
                     Text(focus["text"] as? String ?? "")
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(.secondary)
+                        .lineSpacing(4)
                 }
-                .padding(12)
+                .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(
@@ -1678,15 +1769,15 @@ struct CoachOSMockView: View {
     }
 
     private var timelineCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("06:00").font(.caption2).foregroundStyle(.secondary)
+                Text("06:00").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text("12:00").font(.caption2).foregroundStyle(.secondary)
+                Text("12:00").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text("18:00").font(.caption2).foregroundStyle(.secondary)
+                Text("18:00").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text("22:00").font(.caption2).foregroundStyle(.secondary)
+                Text("22:00").font(.caption).foregroundStyle(.secondary)
             }
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 6)
@@ -1711,11 +1802,11 @@ struct CoachOSMockView: View {
                     Spacer()
                 }
             }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 ProgressView(value: 0.72)
                     .tint(.orange)
                 Text("已摄入 1950 / 目标 2200 kcal")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
                     miniMacro(label: "蛋白", value: "118 / 130g", tint: .red)
@@ -1724,7 +1815,7 @@ struct CoachOSMockView: View {
                 }
             }
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         .overlay(
@@ -1734,15 +1825,15 @@ struct CoachOSMockView: View {
     }
 
     private func miniMacro(label: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.caption2.weight(.semibold))
+                .font(.subheadline.weight(.bold))
                 .foregroundStyle(.primary)
             RoundedRectangle(cornerRadius: 2)
-                .fill(tint.opacity(0.25))
+                .fill(tint.opacity(0.4))
                 .frame(height: 4)
         }
     }
@@ -2197,17 +2288,17 @@ struct CoachOSMockView: View {
     }
 
     private func metricTile(title: String, value: String, hint: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.title3.weight(.semibold))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
             Text(hint)
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         .overlay(
